@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Face-Blur-Studio</Name>
+  <Repository>face-blur-studio:latest</Repository>
+  <Registry/>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/your-repo/face-blur-studio</Support>
+  <Project>https://github.com/your-repo/face-blur-studio</Project>
+  <Overview>
+    Face Blur Studio - Professional AI-powered face censoring tool with browser-based face detection.
+    
+    Features:
+    - AI-powered face detection using Hugging Face Transformers
+    - Multiple censoring options: black squares, eye bars, pixelation
+    - Real-time preview with full-resolution download
+    - No server-side processing required - all AI runs in browser
+    - Modern dark theme interface
+    
+    Simply upload an image, select your censoring method, and download the processed result.
+  </Overview>
+  <Category>Tools:Multimedia</Category>
+  <WebUI>http://[IP]:[PORT:8080]</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/your-repo/face-blur-studio/main/public/favicon.ico</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled></DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="80" Default="8080" Mode="tcp" Description="Port for accessing the Face Blur Studio web interface" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="App Data" Target="/config" Default="/mnt/user/appdata/face-blur-studio" Mode="rw" Description="Container data storage path" Type="Path" Display="advanced" Required="false" Mask="false">/mnt/user/appdata/face-blur-studio</Config>
+</Container>

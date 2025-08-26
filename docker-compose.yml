@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  face-blur-studio:
+    build: .
+    container_name: face-blur-studio
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.face-blur-studio.rule=Host(`face-blur-studio.local`)"
+      - "traefik.http.routers.face-blur-studio.entrypoints=web"
+      - "traefik.http.services.face-blur-studio.loadbalancer.server.port=80"
+    networks:
+      - face-blur-network
+
+networks:
+  face-blur-network:
+    driver: bridge
