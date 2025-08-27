@@ -74,7 +74,13 @@ const pixelateRegion = (
   height: number,
   pixelSize: number
 ) => {
-  // Get the image data for the region
+  // Ensure we're working with integer coordinates
+  x = Math.round(x);
+  y = Math.round(y);
+  width = Math.round(width);
+  height = Math.round(height);
+  
+  // Get the image data for the region with proper bounds checking
   const imageData = ctx.getImageData(x, y, width, height);
   const data = imageData.data;
   
@@ -84,15 +90,21 @@ const pixelateRegion = (
       let r = 0, g = 0, b = 0, a = 0;
       let count = 0;
       
+      // Calculate actual block bounds to prevent overflow
+      const blockWidth = Math.min(pixelSize, width - blockX);
+      const blockHeight = Math.min(pixelSize, height - blockY);
+      
       // Average the colors in this block
-      for (let py = blockY; py < Math.min(blockY + pixelSize, height); py++) {
-        for (let px = blockX; px < Math.min(blockX + pixelSize, width); px++) {
+      for (let py = blockY; py < blockY + blockHeight; py++) {
+        for (let px = blockX; px < blockX + blockWidth; px++) {
           const idx = (py * width + px) * 4;
-          r += data[idx];
-          g += data[idx + 1];
-          b += data[idx + 2];
-          a += data[idx + 3];
-          count++;
+          if (idx >= 0 && idx + 3 < data.length) {
+            r += data[idx];
+            g += data[idx + 1];
+            b += data[idx + 2];
+            a += data[idx + 3];
+            count++;
+          }
         }
       }
       
@@ -103,13 +115,15 @@ const pixelateRegion = (
         a = Math.round(a / count);
         
         // Fill the entire block with the average color
-        for (let py = blockY; py < Math.min(blockY + pixelSize, height); py++) {
-          for (let px = blockX; px < Math.min(blockX + pixelSize, width); px++) {
+        for (let py = blockY; py < blockY + blockHeight; py++) {
+          for (let px = blockX; px < blockX + blockWidth; px++) {
             const idx = (py * width + px) * 4;
-            data[idx] = r;
-            data[idx + 1] = g;
-            data[idx + 2] = b;
-            data[idx + 3] = a;
+            if (idx >= 0 && idx + 3 < data.length) {
+              data[idx] = r;
+              data[idx + 1] = g;
+              data[idx + 2] = b;
+              data[idx + 3] = a;
+            }
           }
         }
       }
