@@ -145,35 +145,54 @@ const pixelSortRegion = (
   const imageData = ctx.getImageData(x, y, width, height);
   const data = imageData.data;
   
-  const sortLength = Math.round((intensity / 100) * width);
+  // Create horizontal bands for sorting - inspired by lenssort
+  const bandHeight = Math.max(1, Math.round(height / 8)); // Create multiple bands
+  const sortLength = Math.round((intensity / 100) * width * 0.8); // How much of each row to sort
   
-  // Sort pixels horizontally
-  for (let row = 0; row < height; row += 2) {
-    for (let col = 0; col < width; col += sortLength) {
-      const sortWidth = Math.min(sortLength, width - col);
-      const pixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
+  for (let band = 0; band < Math.ceil(height / bandHeight); band++) {
+    const bandY = band * bandHeight;
+    const actualBandHeight = Math.min(bandHeight, height - bandY);
+    
+    // Sort each row in this band
+    for (let row = bandY; row < bandY + actualBandHeight; row++) {
+      if (row >= height) break;
       
-      // Extract pixels to sort
-      for (let i = 0; i < sortWidth; i++) {
-        const idx = (row * width + col + i) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        const a = data[idx + 3];
-        const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-        pixels.push({ r, g, b, a, brightness });
-      }
-      
-      // Sort by brightness
-      pixels.sort((a, b) => a.brightness - b.brightness);
-      
-      // Put sorted pixels back
-      for (let i = 0; i < sortWidth; i++) {
-        const idx = (row * width + col + i) * 4;
-        data[idx] = pixels[i].r;
-        data[idx + 1] = pixels[i].g;
-        data[idx + 2] = pixels[i].b;
-        data[idx + 3] = pixels[i].a;
+      // Create segments to sort within the row
+      for (let segmentStart = 0; segmentStart < width; segmentStart += sortLength) {
+        const segmentEnd = Math.min(segmentStart + sortLength, width);
+        const segmentWidth = segmentEnd - segmentStart;
+        
+        if (segmentWidth < 2) continue;
+        
+        const pixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
+        
+        // Extract pixels from this segment
+        for (let col = segmentStart; col < segmentEnd; col++) {
+          const idx = (row * width + col) * 4;
+          if (idx >= 0 && idx + 3 < data.length) {
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const a = data[idx + 3];
+            const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+            pixels.push({ r, g, b, a, brightness });
+          }
+        }
+        
+        // Sort by brightness for that characteristic horizontal line effect
+        pixels.sort((a, b) => a.brightness - b.brightness);
+        
+        // Put sorted pixels back
+        for (let i = 0; i < pixels.length; i++) {
+          const col = segmentStart + i;
+          const idx = (row * width + col) * 4;
+          if (idx >= 0 && idx + 3 < data.length) {
+            data[idx] = pixels[i].r;
+            data[idx + 1] = pixels[i].g;
+            data[idx + 2] = pixels[i].b;
+            data[idx + 3] = pixels[i].a;
+          }
+        }
       }
     }
   }
