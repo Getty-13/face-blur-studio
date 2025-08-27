@@ -11,6 +11,8 @@ const Index = () => {
   const [faces, setFaces] = useState<DetectedFace[]>([]);
   const [censorType, setCensorType] = useState<CensorType>('black-square');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pixelIntensity, setPixelIntensity] = useState(12);
+  const [sortIntensity, setSortIntensity] = useState(50);
 
   const handleImageLoad = useCallback(async (file: File, imageElement: HTMLImageElement) => {
     setOriginalImage(imageElement);
@@ -40,6 +42,8 @@ const Index = () => {
     setOriginalImageUrl('');
     setFaces([]);
     setIsProcessing(false);
+    setPixelIntensity(12);
+    setSortIntensity(50);
   }, []);
 
   return (
@@ -74,6 +78,8 @@ const Index = () => {
               faces={faces}
               censorType={censorType}
               isProcessing={isProcessing}
+              pixelIntensity={pixelIntensity}
+              sortIntensity={sortIntensity}
             />
           </div>
 
@@ -83,6 +89,10 @@ const Index = () => {
               selectedType={censorType}
               onTypeChange={setCensorType}
               facesDetected={faces.length}
+              pixelIntensity={pixelIntensity}
+              onPixelIntensityChange={setPixelIntensity}
+              sortIntensity={sortIntensity}
+              onSortIntensityChange={setSortIntensity}
             />
           </div>
         </div>

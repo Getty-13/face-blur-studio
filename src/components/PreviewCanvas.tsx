@@ -11,6 +11,8 @@ interface PreviewCanvasProps {
   faces: DetectedFace[];
   censorType: CensorType;
   isProcessing: boolean;
+  pixelIntensity: number;
+  sortIntensity: number;
 }
 
 export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({
@@ -18,6 +20,8 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({
   faces,
   censorType,
   isProcessing,
+  pixelIntensity,
+  sortIntensity,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [processedCanvas, setProcessedCanvas] = useState<HTMLCanvasElement | null>(null);
@@ -52,12 +56,12 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({
     }
 
     // Process the image with censoring
-    const processed = processImage(originalImage, faces, censorType);
+    const processed = processImage(originalImage, faces, censorType, pixelIntensity, sortIntensity);
     setProcessedCanvas(processed);
     
     // Draw processed image to preview canvas (scaled down)
     ctx.drawImage(processed, 0, 0, displayWidth, displayHeight);
-  }, [originalImage, faces, censorType]);
+  }, [originalImage, faces, censorType, pixelIntensity, sortIntensity]);
 
   const handleDownload = () => {
     if (!processedCanvas) return;

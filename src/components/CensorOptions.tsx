@@ -1,14 +1,19 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Square, Minus, Eye, User } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Square, Minus, Eye, User, Shuffle } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
   onTypeChange: (type: CensorType) => void;
   facesDetected: number;
+  pixelIntensity: number;
+  onPixelIntensityChange: (value: number) => void;
+  sortIntensity: number;
+  onSortIntensityChange: (value: number) => void;
 }
 
 const censorOptions = [
@@ -36,13 +41,25 @@ const censorOptions = [
     description: 'Pixelate entire face',
     icon: User,
   },
+  {
+    type: 'pixel-sort' as CensorType,
+    label: 'Pixel Sort',
+    description: 'Artistic pixel sorting effect',
+    icon: Shuffle,
+  },
 ];
 
 export const CensorOptions: React.FC<CensorOptionsProps> = ({
   selectedType,
   onTypeChange,
   facesDetected,
+  pixelIntensity,
+  onPixelIntensityChange,
+  sortIntensity,
+  onSortIntensityChange,
 }) => {
+  const needsPixelSlider = ['pixelated-eyes', 'pixelated-face'].includes(selectedType);
+  const needsSortSlider = selectedType === 'pixel-sort';
   return (
     <Card className="p-6 shadow-card">
       <div className="mb-4">
@@ -84,6 +101,44 @@ export const CensorOptions: React.FC<CensorOptionsProps> = ({
           );
         })}
       </div>
+      
+      {(needsPixelSlider || needsSortSlider) && facesDetected > 0 && (
+        <div className="mt-4 pt-4 border-t border-border">
+          {needsPixelSlider && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Pixel Intensity</label>
+              <Slider
+                value={[pixelIntensity]}
+                onValueChange={(value) => onPixelIntensityChange(value[0])}
+                min={4}
+                max={20}
+                step={2}
+                className="w-full"
+              />
+              <div className="text-xs text-muted-foreground">
+                Size: {pixelIntensity}px
+              </div>
+            </div>
+          )}
+          
+          {needsSortSlider && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Sort Intensity</label>
+              <Slider
+                value={[sortIntensity]}
+                onValueChange={(value) => onSortIntensityChange(value[0])}
+                min={10}
+                max={100}
+                step={10}
+                className="w-full"
+              />
+              <div className="text-xs text-muted-foreground">
+                Strength: {sortIntensity}%
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 };
