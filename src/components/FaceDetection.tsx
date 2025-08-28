@@ -4,6 +4,8 @@ import { pipeline, env } from '@huggingface/transformers';
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
+let landmarkPipeline: any = null;
+
 export interface DetectedFace {
   x: number;
   y: number;
@@ -72,39 +74,42 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
     console.log('Raw detection results:', results);
     
     // Filter for face detections with improved logic
-    const faces: DetectedFace[] = results
-      .filter((result: any) => {
-        const label = result.label.toLowerCase();
-        const score = result.score;
-        console.log('Checking result:', label, score);
-        
-        // Check for face-specific labels or person with high confidence
-        const isFace = label.includes('face') || 
-                      (label.includes('person') && score > 0.6) ||
-                      label.includes('head');
-        
-        return isFace && score > 0.4;
-      })
-      .map((result: any, index: number) => {
-        console.log(`Processing face ${index + 1}:`, result);
-        const face = {
+    const faces: DetectedFace[] = [];
+    
+    for (const result of results) {
+      const label = result.label.toLowerCase();
+      const score = result.score;
+      console.log('Checking result:', label, score);
+      
+      // Check for face-specific labels or person with high confidence
+      const isFace = label.includes('face') || 
+                    (label.includes('person') && score > 0.6) ||
+                    label.includes('head');
+      
+      if (isFace && score > 0.4) {
+        const faceRegion = {
           x: Math.max(0, result.box.xmin),
           y: Math.max(0, result.box.ymin),
           width: Math.min(canvas.width - result.box.xmin, result.box.xmax - result.box.xmin),
           height: Math.min(canvas.height - result.box.ymin, result.box.ymax - result.box.ymin),
-          confidence: result.score,
-          landmarks: generateFaceLandmarks(result.box),
         };
         
         // Ensure face dimensions are reasonable
-        if (face.width < 20 || face.height < 20) {
+        if (faceRegion.width < 20 || faceRegion.height < 20) {
           console.log('Face too small, skipping');
-          return null;
+          continue;
         }
         
-        return face;
-      })
-      .filter((face): face is DetectedFace => face !== null);
+        // Extract face region for landmark detection
+        const landmarks = await detectFacialLandmarks(canvas, faceRegion);
+        
+        faces.push({
+          ...faceRegion,
+          confidence: score,
+          landmarks,
+        });
+      }
+    }
     
     console.log(`Successfully detected ${faces.length} valid faces`);
     return faces;
@@ -130,56 +135,149 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
       }
     ];
     
-    return mockFaces.map(face => ({
+    return await Promise.all(mockFaces.map(async face => ({
       ...face,
-      landmarks: generateFaceLandmarks({
-        xmin: face.x,
-        ymin: face.y,
-        xmax: face.x + face.width,
-        ymax: face.y + face.height,
-      }),
-    }));
+      landmarks: await generateRealisticLandmarks(face),
+    })));
   }
 };
 
-// Generate facial landmark points for wireframe overlay
-const generateFaceLandmarks = (box: any): Array<{x: number, y: number}> => {
-  const { xmin, ymin, xmax, ymax } = box;
-  const width = xmax - xmin;
-  const height = ymax - ymin;
+// Detect facial landmarks using image analysis
+const detectFacialLandmarks = async (
+  canvas: HTMLCanvasElement, 
+  faceRegion: {x: number, y: number, width: number, height: number}
+): Promise<Array<{x: number, y: number}>> => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [];
   
-  // Generate a grid of points for triangular mesh
+  // Extract face region
+  const faceCanvas = document.createElement('canvas');
+  const faceCtx = faceCanvas.getContext('2d');
+  if (!faceCtx) return [];
+  
+  faceCanvas.width = faceRegion.width;
+  faceCanvas.height = faceRegion.height;
+  
+  faceCtx.drawImage(
+    canvas,
+    faceRegion.x, faceRegion.y, faceRegion.width, faceRegion.height,
+    0, 0, faceRegion.width, faceRegion.height
+  );
+  
+  // Get image data for analysis
+  const imageData = faceCtx.getImageData(0, 0, faceRegion.width, faceRegion.height);
+  const landmarks = await analyzeImageForLandmarks(imageData, faceRegion);
+  
+  return landmarks;
+};
+
+// Analyze image data to find facial features
+const analyzeImageForLandmarks = async (
+  imageData: ImageData,
+  faceRegion: {x: number, y: number, width: number, height: number}
+): Promise<Array<{x: number, y: number}>> => {
+  const { data, width, height } = imageData;
   const landmarks: Array<{x: number, y: number}> = [];
   
-  // Face outline points
-  const outlinePoints = 16;
+  // Find darker regions that might be eyes, nose, mouth
+  const eyeLevel = height * 0.35;
+  const noseLevel = height * 0.55;
+  const mouthLevel = height * 0.75;
+  
+  // Scan for eye positions (darker regions)
+  const leftEyeX = findDarkestRegionInRow(data, width, height, Math.round(eyeLevel), 0, width * 0.5);
+  const rightEyeX = findDarkestRegionInRow(data, width, height, Math.round(eyeLevel), width * 0.5, width);
+  
+  // Scan for nose tip
+  const noseX = findDarkestRegionInRow(data, width, height, Math.round(noseLevel), width * 0.4, width * 0.6);
+  
+  // Scan for mouth
+  const mouthX = findDarkestRegionInRow(data, width, height, Math.round(mouthLevel), width * 0.3, width * 0.7);
+  
+  // Convert to absolute coordinates
+  if (leftEyeX >= 0) {
+    landmarks.push({ x: faceRegion.x + leftEyeX, y: faceRegion.y + eyeLevel });
+  }
+  if (rightEyeX >= 0) {
+    landmarks.push({ x: faceRegion.x + rightEyeX, y: faceRegion.y + eyeLevel });
+  }
+  if (noseX >= 0) {
+    landmarks.push({ x: faceRegion.x + noseX, y: faceRegion.y + noseLevel });
+  }
+  if (mouthX >= 0) {
+    landmarks.push({ x: faceRegion.x + mouthX, y: faceRegion.y + mouthLevel });
+  }
+  
+  // Add face outline points
+  const outlinePoints = 12;
   for (let i = 0; i < outlinePoints; i++) {
     const angle = (i / outlinePoints) * Math.PI * 2;
-    const radiusX = width * 0.5;
-    const radiusY = height * 0.5;
+    const radiusX = faceRegion.width * 0.45;
+    const radiusY = faceRegion.height * 0.45;
     landmarks.push({
-      x: xmin + width * 0.5 + Math.cos(angle) * radiusX * 0.9,
-      y: ymin + height * 0.5 + Math.sin(angle) * radiusY * 0.9,
+      x: faceRegion.x + faceRegion.width * 0.5 + Math.cos(angle) * radiusX,
+      y: faceRegion.y + faceRegion.height * 0.5 + Math.sin(angle) * radiusY,
     });
   }
   
-  // Internal grid points for mesh
-  for (let row = 1; row < 6; row++) {
-    for (let col = 1; col < 6; col++) {
-      landmarks.push({
-        x: xmin + (width * col) / 6,
-        y: ymin + (height * row) / 6,
-      });
+  return landmarks;
+};
+
+// Find darkest region in a row (likely to be facial features)
+const findDarkestRegionInRow = (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  row: number,
+  startX: number,
+  endX: number
+): number => {
+  let darkestX = -1;
+  let darkestValue = 255;
+  
+  for (let x = Math.round(startX); x < Math.round(endX); x++) {
+    const idx = (row * width + x) * 4;
+    if (idx >= 0 && idx + 2 < data.length) {
+      const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+      if (brightness < darkestValue) {
+        darkestValue = brightness;
+        darkestX = x;
+      }
     }
   }
   
-  // Eye centers
+  return darkestX;
+};
+
+// Generate realistic landmarks for fallback
+const generateRealisticLandmarks = async (
+  faceRegion: {x: number, y: number, width: number, height: number}
+): Promise<Array<{x: number, y: number}>> => {
+  const landmarks: Array<{x: number, y: number}> = [];
+  
+  // Eyes (more realistic positioning)
   landmarks.push(
-    { x: xmin + width * 0.3, y: ymin + height * 0.35 }, // Left eye
-    { x: xmin + width * 0.7, y: ymin + height * 0.35 }, // Right eye
-    { x: xmin + width * 0.5, y: ymin + height * 0.6 },  // Nose
-    { x: xmin + width * 0.5, y: ymin + height * 0.8 }   // Mouth
+    { x: faceRegion.x + faceRegion.width * 0.3, y: faceRegion.y + faceRegion.height * 0.35 },
+    { x: faceRegion.x + faceRegion.width * 0.7, y: faceRegion.y + faceRegion.height * 0.35 }
   );
+  
+  // Nose
+  landmarks.push({ x: faceRegion.x + faceRegion.width * 0.5, y: faceRegion.y + faceRegion.height * 0.55 });
+  
+  // Mouth
+  landmarks.push({ x: faceRegion.x + faceRegion.width * 0.5, y: faceRegion.y + faceRegion.height * 0.75 });
+  
+  // Face outline (more natural oval)
+  const outlinePoints = 16;
+  for (let i = 0; i < outlinePoints; i++) {
+    const angle = (i / outlinePoints) * Math.PI * 2 - Math.PI / 2; // Start from top
+    const radiusX = faceRegion.width * 0.45;
+    const radiusY = faceRegion.height * 0.48;
+    landmarks.push({
+      x: faceRegion.x + faceRegion.width * 0.5 + Math.cos(angle) * radiusX,
+      y: faceRegion.y + faceRegion.height * 0.5 + Math.sin(angle) * radiusY,
+    });
+  }
   
   return landmarks;
 };
