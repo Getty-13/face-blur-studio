@@ -2,9 +2,9 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Square, Minus, Eye, User, Shuffle } from 'lucide-react';
+import { Square, Minus, Eye, User, Shuffle, Zap } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'wireframe';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
@@ -44,8 +44,14 @@ const censorOptions = [
   {
     type: 'pixel-sort' as CensorType,
     label: 'Pixel Sort',
-    description: 'Artistic pixel sorting effect',
+    description: 'Vertical stripe sorting',
     icon: Shuffle,
+  },
+  {
+    type: 'wireframe' as CensorType,
+    label: 'Wireframe',
+    description: 'Geometric mesh overlay',
+    icon: Zap,
   },
 ];
 

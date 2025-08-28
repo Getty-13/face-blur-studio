@@ -63,6 +63,10 @@ const applyCensoring = (
     case 'pixel-sort':
       pixelSortRegion(ctx, x, y, width, height, sortIntensity);
       break;
+      
+    case 'wireframe':
+      drawWireframeOverlay(ctx, face);
+      break;
   }
 };
 
@@ -145,47 +149,71 @@ const pixelSortRegion = (
   const imageData = ctx.getImageData(x, y, width, height);
   const data = imageData.data;
   
-  // Create horizontal bands for sorting - inspired by lenssort
-  const bandHeight = Math.max(1, Math.round(height / 8)); // Create multiple bands
-  const sortLength = Math.round((intensity / 100) * width * 0.8); // How much of each row to sort
+  // Create vertical columns for sorting (like the reference image)
+  const columnWidth = Math.max(1, Math.round(2 + (intensity / 100) * 8)); // Thicker columns at higher intensity
+  const sortHeight = Math.round((intensity / 100) * height * 0.9); // How much of each column to sort
   
-  for (let band = 0; band < Math.ceil(height / bandHeight); band++) {
-    const bandY = band * bandHeight;
-    const actualBandHeight = Math.min(bandHeight, height - bandY);
+  for (let col = 0; col < width; col += columnWidth) {
+    const actualColumnWidth = Math.min(columnWidth, width - col);
     
-    // Sort each row in this band
-    for (let row = bandY; row < bandY + actualBandHeight; row++) {
-      if (row >= height) break;
+    // Sort each column
+    for (let colOffset = 0; colOffset < actualColumnWidth; colOffset++) {
+      const currentCol = col + colOffset;
+      if (currentCol >= width) break;
       
-      // Create segments to sort within the row
-      for (let segmentStart = 0; segmentStart < width; segmentStart += sortLength) {
-        const segmentEnd = Math.min(segmentStart + sortLength, width);
-        const segmentWidth = segmentEnd - segmentStart;
+      // Create segments to sort within the column
+      for (let segmentStart = 0; segmentStart < height; segmentStart += sortHeight) {
+        const segmentEnd = Math.min(segmentStart + sortHeight, height);
+        const segmentHeight = segmentEnd - segmentStart;
         
-        if (segmentWidth < 2) continue;
+        if (segmentHeight < 2) continue;
         
-        const pixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
+        const pixels: Array<{r: number, g: number, b: number, a: number, hue: number}> = [];
         
         // Extract pixels from this segment
-        for (let col = segmentStart; col < segmentEnd; col++) {
-          const idx = (row * width + col) * 4;
+        for (let row = segmentStart; row < segmentEnd; row++) {
+          const idx = (row * width + currentCol) * 4;
           if (idx >= 0 && idx + 3 < data.length) {
-            const r = data[idx];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
+            const r = data[idx] / 255;
+            const g = data[idx + 1] / 255;
+            const b = data[idx + 2] / 255;
             const a = data[idx + 3];
-            const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-            pixels.push({ r, g, b, a, brightness });
+            
+            // Convert to HSL for hue-based sorting
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const diff = max - min;
+            
+            let hue = 0;
+            if (diff !== 0) {
+              if (max === r) {
+                hue = ((g - b) / diff) % 6;
+              } else if (max === g) {
+                hue = (b - r) / diff + 2;
+              } else {
+                hue = (r - g) / diff + 4;
+              }
+            }
+            hue = hue * 60;
+            if (hue < 0) hue += 360;
+            
+            pixels.push({ 
+              r: data[idx], 
+              g: data[idx + 1], 
+              b: data[idx + 2], 
+              a, 
+              hue 
+            });
           }
         }
         
-        // Sort by brightness for that characteristic horizontal line effect
-        pixels.sort((a, b) => a.brightness - b.brightness);
+        // Sort by hue for colorful vertical stripes effect
+        pixels.sort((a, b) => a.hue - b.hue);
         
         // Put sorted pixels back
         for (let i = 0; i < pixels.length; i++) {
-          const col = segmentStart + i;
-          const idx = (row * width + col) * 4;
+          const row = segmentStart + i;
+          const idx = (row * width + currentCol) * 4;
           if (idx >= 0 && idx + 3 < data.length) {
             data[idx] = pixels[i].r;
             data[idx + 1] = pixels[i].g;
@@ -198,4 +226,41 @@ const pixelSortRegion = (
   }
   
   ctx.putImageData(imageData, x, y);
+};
+
+const drawWireframeOverlay = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace
+) => {
+  if (!face.landmarks || face.landmarks.length === 0) return;
+  
+  ctx.strokeStyle = '#00ff00';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+  
+  const landmarks = face.landmarks;
+  
+  // Draw triangular mesh by connecting nearby points
+  for (let i = 0; i < landmarks.length; i++) {
+    for (let j = i + 1; j < landmarks.length; j++) {
+      const p1 = landmarks[i];
+      const p2 = landmarks[j];
+      const distance = Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+      
+      // Only connect points that are reasonably close
+      if (distance < face.width * 0.3) {
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+    }
+  }
+  
+  // Draw landmark points
+  landmarks.forEach(point => {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
 };
