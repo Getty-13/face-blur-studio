@@ -138,6 +138,7 @@ const pixelateRegion = (
   ctx.putImageData(imageData, x, y);
 };
 
+// Enhanced pixel sorting based on lenssort/pixelsort Python library approach
 const pixelSortRegion = (
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -149,79 +150,47 @@ const pixelSortRegion = (
   const imageData = ctx.getImageData(x, y, width, height);
   const data = imageData.data;
   
-  // Create vertical columns for sorting (like the reference image)
-  const columnWidth = Math.max(1, Math.round(2 + (intensity / 100) * 8)); // Thicker columns at higher intensity
-  const sortHeight = Math.round((intensity / 100) * height * 0.9); // How much of each column to sort
-  
-  for (let col = 0; col < width; col += columnWidth) {
-    const actualColumnWidth = Math.min(columnWidth, width - col);
+  // Process each row of pixels (horizontal sorting like in Python version)
+  for (let row = 0; row < height; row++) {
+    // Random chance to sort this row based on intensity
+    if (Math.random() * 100 > intensity) {
+      continue; // Skip this row
+    }
     
-    // Sort each column
-    for (let colOffset = 0; colOffset < actualColumnWidth; colOffset++) {
-      const currentCol = col + colOffset;
-      if (currentCol >= width) break;
+    // Pick random start and end points for sorting within the row
+    const minSort = Math.max(3, Math.floor(Math.random() * (width * 0.3)));
+    const maxSort = Math.min(width - 1, minSort + Math.floor(Math.random() * (width - minSort)));
+    
+    if (maxSort - minSort < 3) continue; // Skip if segment too small
+    
+    // Extract pixels from this row segment
+    const rowPixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
+    for (let col = minSort; col < maxSort; col++) {
+      const pixelIndex = (row * width + col) * 4;
+      const r = data[pixelIndex];
+      const g = data[pixelIndex + 1];
+      const b = data[pixelIndex + 2];
+      const a = data[pixelIndex + 3];
       
-      // Create segments to sort within the column
-      for (let segmentStart = 0; segmentStart < height; segmentStart += sortHeight) {
-        const segmentEnd = Math.min(segmentStart + sortHeight, height);
-        const segmentHeight = segmentEnd - segmentStart;
-        
-        if (segmentHeight < 2) continue;
-        
-        const pixels: Array<{r: number, g: number, b: number, a: number, hue: number}> = [];
-        
-        // Extract pixels from this segment
-        for (let row = segmentStart; row < segmentEnd; row++) {
-          const idx = (row * width + currentCol) * 4;
-          if (idx >= 0 && idx + 3 < data.length) {
-            const r = data[idx] / 255;
-            const g = data[idx + 1] / 255;
-            const b = data[idx + 2] / 255;
-            const a = data[idx + 3];
-            
-            // Convert to HSL for hue-based sorting
-            const max = Math.max(r, g, b);
-            const min = Math.min(r, g, b);
-            const diff = max - min;
-            
-            let hue = 0;
-            if (diff !== 0) {
-              if (max === r) {
-                hue = ((g - b) / diff) % 6;
-              } else if (max === g) {
-                hue = (b - r) / diff + 2;
-              } else {
-                hue = (r - g) / diff + 4;
-              }
-            }
-            hue = hue * 60;
-            if (hue < 0) hue += 360;
-            
-            pixels.push({ 
-              r: data[idx], 
-              g: data[idx + 1], 
-              b: data[idx + 2], 
-              a, 
-              hue 
-            });
-          }
-        }
-        
-        // Sort by hue for colorful vertical stripes effect
-        pixels.sort((a, b) => a.hue - b.hue);
-        
-        // Put sorted pixels back
-        for (let i = 0; i < pixels.length; i++) {
-          const row = segmentStart + i;
-          const idx = (row * width + currentCol) * 4;
-          if (idx >= 0 && idx + 3 < data.length) {
-            data[idx] = pixels[i].r;
-            data[idx + 1] = pixels[i].g;
-            data[idx + 2] = pixels[i].b;
-            data[idx + 3] = pixels[i].a;
-          }
-        }
-      }
+      rowPixels.push({
+        r, g, b, a,
+        brightness: r + g + b // Python version sorts by R + G + B
+      });
+    }
+    
+    // Sort pixels by brightness (same as Python quicksort approach)
+    rowPixels.sort((a, b) => a.brightness - b.brightness);
+    
+    // Put sorted pixels back
+    for (let i = 0; i < rowPixels.length; i++) {
+      const col = minSort + i;
+      const pixelIndex = (row * width + col) * 4;
+      const sortedPixel = rowPixels[i];
+      
+      data[pixelIndex] = sortedPixel.r;
+      data[pixelIndex + 1] = sortedPixel.g;
+      data[pixelIndex + 2] = sortedPixel.b;
+      data[pixelIndex + 3] = sortedPixel.a;
     }
   }
   

@@ -43,8 +43,8 @@ const censorOptions = [
   },
   {
     type: 'pixel-sort' as CensorType,
-    label: 'Pixel Sort',
-    description: 'Vertical stripe sorting',
+    label: 'Pixel Sort (JS)',
+    description: 'Brightness-based horizontal sorting',
     icon: Shuffle,
   },
   {
