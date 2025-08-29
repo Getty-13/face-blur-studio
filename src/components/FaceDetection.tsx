@@ -1,5 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
-import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
+import * as blazeface from '@tensorflow-models/blazeface';
 
 export interface DetectedFace {
   x: number;
@@ -10,78 +10,92 @@ export interface DetectedFace {
   landmarks?: Array<{x: number, y: number}>;
 }
 
-let detector: faceLandmarksDetection.FaceLandmarksDetector | null = null;
+let model: blazeface.BlazeFaceModel | null = null;
 
 const initializeDetector = async () => {
-  if (!detector) {
-    console.log('Initializing MediaPipe FaceMesh detector...');
+  if (!model) {
+    console.log('Initializing BlazeFace detector...');
     try {
       // Initialize TensorFlow.js
       await tf.ready();
       
-      // Create MediaPipe FaceMesh detector
-      const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-      const detectorConfig = {
-        runtime: 'tfjs' as const,
-        refineLandmarks: true,
-        maxFaces: 10, // Detect up to 10 faces
-      };
-      
-      detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-      console.log('MediaPipe FaceMesh detector initialized successfully');
+      // Load BlazeFace model
+      model = await blazeface.load();
+      console.log('BlazeFace detector initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize detector:', error);
+      console.error('Failed to initialize BlazeFace detector:', error);
       throw error;
     }
   }
-  return detector;
+  return model;
 };
 
 export const detectFaces = async (imageElement: HTMLImageElement): Promise<DetectedFace[]> => {
   try {
-    console.log('Starting MediaPipe face detection...');
+    console.log('Starting BlazeFace detection...');
     
-    const faceDetector = await initializeDetector();
+    const detector = await initializeDetector();
     
     console.log('Running detection on image:', imageElement.naturalWidth, 'x', imageElement.naturalHeight);
     
-    // Detect faces using MediaPipe
-    const predictions = await faceDetector.estimateFaces(imageElement);
-    console.log(`MediaPipe detected ${predictions.length} faces`);
+    // Detect faces using BlazeFace
+    const predictions = await detector.estimateFaces(imageElement, false);
+    console.log(`BlazeFace detected ${predictions.length} faces`);
     
     const faces: DetectedFace[] = [];
     
     for (const prediction of predictions) {
-      if (prediction.box) {
-        const { xMin, yMin, width, height } = prediction.box;
+      // Extract coordinates from tensors
+      const topLeft = prediction.topLeft instanceof tf.Tensor ? 
+        await prediction.topLeft.data() : prediction.topLeft;
+      const bottomRight = prediction.bottomRight instanceof tf.Tensor ? 
+        await prediction.bottomRight.data() : prediction.bottomRight;
         
-        // Ensure face dimensions are reasonable
-        if (width < 20 || height < 20) {
-          console.log('Face too small, skipping');
-          continue;
-        }
-        
-        // Convert MediaPipe landmarks to our format
-        const landmarks = prediction.keypoints.map(point => ({
-          x: point.x,
-          y: point.y
-        }));
-        
-        faces.push({
-          x: Math.max(0, xMin),
-          y: Math.max(0, yMin),
-          width: Math.min(imageElement.naturalWidth - xMin, width),
-          height: Math.min(imageElement.naturalHeight - yMin, height),
-          confidence: 0.9, // MediaPipe doesn't provide confidence, use high value
-          landmarks,
-        });
+      const [x1, y1] = Array.from(topLeft);
+      const [x2, y2] = Array.from(bottomRight);
+      
+      const width = x2 - x1;
+      const height = y2 - y1;
+      
+      // Ensure face dimensions are reasonable
+      if (width < 20 || height < 20) {
+        console.log('Face too small, skipping');
+        continue;
       }
+      
+      // BlazeFace provides landmarks for eyes, nose, mouth, ears
+      let landmarks;
+      if (prediction.landmarks) {
+        if (prediction.landmarks instanceof tf.Tensor) {
+          const landmarkData = await prediction.landmarks.data();
+          landmarks = [];
+          for (let i = 0; i < landmarkData.length; i += 2) {
+            landmarks.push({ x: landmarkData[i], y: landmarkData[i + 1] });
+          }
+        } else {
+          landmarks = prediction.landmarks.map((point: number[]) => ({
+            x: point[0],
+            y: point[1]
+          }));
+        }
+      } else {
+        landmarks = await generateDetailedLandmarks({ x: x1, y: y1, width, height });
+      }
+      
+      faces.push({
+        x: Math.max(0, x1),
+        y: Math.max(0, y1),
+        width: Math.min(imageElement.naturalWidth - x1, width),
+        height: Math.min(imageElement.naturalHeight - y1, height),
+        confidence: Array.isArray(prediction.probability) ? prediction.probability[0] : 0.9,
+        landmarks,
+      });
     }
     
     console.log(`Successfully processed ${faces.length} valid faces with landmarks`);
     return faces;
   } catch (error) {
-    console.error('Error with MediaPipe face detection:', error);
+    console.error('Error with BlazeFace detection:', error);
     console.log('Providing fallback face detection for demo');
     
     // Fallback: return multiple mock face detections for demo purposes
@@ -104,17 +118,70 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
     
     return await Promise.all(mockFaces.map(async face => ({
       ...face,
-      landmarks: await generateRealisticLandmarks(face),
+      landmarks: await generateDetailedLandmarks(face),
     })));
   }
 };
 
 // Helper function to clean up detector
 export const cleanupDetector = () => {
-  if (detector) {
-    detector.dispose();
-    detector = null;
+  if (model) {
+    model.dispose();
+    model = null;
   }
+};
+
+// Generate detailed landmarks for better wireframe tracking
+const generateDetailedLandmarks = async (
+  faceRegion: {x: number, y: number, width: number, height: number}
+): Promise<Array<{x: number, y: number}>> => {
+  const landmarks: Array<{x: number, y: number}> = [];
+  
+  // Key facial features with more realistic positioning
+  const centerX = faceRegion.x + faceRegion.width * 0.5;
+  const centerY = faceRegion.y + faceRegion.height * 0.5;
+  
+  // Eyes
+  landmarks.push(
+    { x: faceRegion.x + faceRegion.width * 0.3, y: faceRegion.y + faceRegion.height * 0.35 },
+    { x: faceRegion.x + faceRegion.width * 0.7, y: faceRegion.y + faceRegion.height * 0.35 }
+  );
+  
+  // Nose bridge and tip
+  landmarks.push(
+    { x: centerX, y: faceRegion.y + faceRegion.height * 0.45 },
+    { x: centerX, y: faceRegion.y + faceRegion.height * 0.55 }
+  );
+  
+  // Mouth corners and center
+  landmarks.push(
+    { x: faceRegion.x + faceRegion.width * 0.4, y: faceRegion.y + faceRegion.height * 0.75 },
+    { x: centerX, y: faceRegion.y + faceRegion.height * 0.75 },
+    { x: faceRegion.x + faceRegion.width * 0.6, y: faceRegion.y + faceRegion.height * 0.75 }
+  );
+  
+  // Eyebrows
+  landmarks.push(
+    { x: faceRegion.x + faceRegion.width * 0.25, y: faceRegion.y + faceRegion.height * 0.25 },
+    { x: faceRegion.x + faceRegion.width * 0.75, y: faceRegion.y + faceRegion.height * 0.25 }
+  );
+  
+  // Chin
+  landmarks.push({ x: centerX, y: faceRegion.y + faceRegion.height * 0.9 });
+  
+  // Face contour (detailed outline)
+  const contourPoints = 20;
+  for (let i = 0; i < contourPoints; i++) {
+    const angle = (i / contourPoints) * Math.PI * 2 - Math.PI / 2;
+    const radiusX = faceRegion.width * 0.45;
+    const radiusY = faceRegion.height * 0.48;
+    landmarks.push({
+      x: centerX + Math.cos(angle) * radiusX,
+      y: centerY + Math.sin(angle) * radiusY,
+    });
+  }
+  
+  return landmarks;
 };
 
 // Generate realistic landmarks for fallback
