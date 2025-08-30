@@ -49,8 +49,8 @@ const predictionToFace = async (
   const topLeft = prediction.topLeft instanceof tf.Tensor ? await prediction.topLeft.data() : prediction.topLeft;
   const bottomRight = prediction.bottomRight instanceof tf.Tensor ? await prediction.bottomRight.data() : prediction.bottomRight;
 
-  const [x1Raw, y1Raw] = Array.from(topLeft);
-  const [x2Raw, y2Raw] = Array.from(bottomRight);
+  const [x1Raw, y1Raw] = Array.from(topLeft).map(Number);
+  const [x2Raw, y2Raw] = Array.from(bottomRight).map(Number);
 
   const x1 = x1Raw * scaleX + offsetX;
   const y1 = y1Raw * scaleY + offsetY;
