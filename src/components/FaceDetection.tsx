@@ -1,5 +1,7 @@
+
 import * as tf from '@tensorflow/tfjs';
 import * as blazeface from '@tensorflow-models/blazeface';
+import { nms } from '@/utils/boxes';
 
 export interface DetectedFace {
   x: number;
@@ -23,7 +25,7 @@ const initializeDetector = async () => {
       model = await blazeface.load({
         maxFaces: 10,          // allow many faces
         iouThreshold: 0.3,     // NMS threshold
-        scoreThreshold: 0.6    // lower threshold to catch more faces
+        scoreThreshold: 0.5    // slightly lower to catch more faces
       });
       console.log('BlazeFace detector initialized successfully');
     } catch (error) {
@@ -32,6 +34,107 @@ const initializeDetector = async () => {
     }
   }
   return model;
+};
+
+// Convert a BlazeFace prediction into our DetectedFace type with scaling/offset
+const predictionToFace = async (
+  prediction: any,
+  scaleX: number,
+  scaleY: number,
+  offsetX: number,
+  offsetY: number,
+  imgW: number,
+  imgH: number
+): Promise<DetectedFace | null> => {
+  const topLeft = prediction.topLeft instanceof tf.Tensor ? await prediction.topLeft.data() : prediction.topLeft;
+  const bottomRight = prediction.bottomRight instanceof tf.Tensor ? await prediction.bottomRight.data() : prediction.bottomRight;
+
+  const [x1Raw, y1Raw] = Array.from(topLeft);
+  const [x2Raw, y2Raw] = Array.from(bottomRight);
+
+  const x1 = x1Raw * scaleX + offsetX;
+  const y1 = y1Raw * scaleY + offsetY;
+  const x2 = x2Raw * scaleX + offsetX;
+  const y2 = y2Raw * scaleY + offsetY;
+
+  const width = x2 - x1;
+  const height = y2 - y1;
+
+  if (width < 20 || height < 20) {
+    return null;
+  }
+
+  let landmarks: Array<{x: number, y: number}> | undefined;
+  if (prediction.landmarks) {
+    if (prediction.landmarks instanceof tf.Tensor) {
+      const landmarkData = await prediction.landmarks.data();
+      landmarks = [] as Array<{x: number, y: number}>;
+      for (let i = 0; i < landmarkData.length; i += 2) {
+        landmarks.push({ x: landmarkData[i] * scaleX + offsetX, y: landmarkData[i + 1] * scaleY + offsetY });
+      }
+    } else {
+      landmarks = prediction.landmarks.map((point: number[]) => ({
+        x: point[0] * scaleX + offsetX,
+        y: point[1] * scaleY + offsetY
+      }));
+    }
+  } else {
+    landmarks = await generateDetailedLandmarks({ x: x1, y: y1, width, height });
+  }
+
+  const conf = Array.isArray(prediction.probability) ? prediction.probability[0] : (prediction.probability ?? 0.9);
+
+  return {
+    x: Math.max(0, x1),
+    y: Math.max(0, y1),
+    width: Math.min(imgW - x1, width),
+    height: Math.min(imgH - y1, height),
+    confidence: conf,
+    landmarks
+  };
+};
+
+// Tiled detection to find smaller/multiple faces across large images
+const detectWithTiling = async (
+  detector: blazeface.BlazeFaceModel,
+  imageElement: HTMLImageElement
+): Promise<DetectedFace[]> => {
+  const TILE_SIZE = 512;
+  const OVERLAP = 0.2;
+  const stepX = Math.max(64, Math.floor(TILE_SIZE * (1 - OVERLAP)));
+  const stepY = stepX;
+
+  const imgW = imageElement.naturalWidth;
+  const imgH = imageElement.naturalHeight;
+
+  const off = document.createElement('canvas');
+  const octx = off.getContext('2d');
+  if (!octx) return [];
+
+  const found: DetectedFace[] = [];
+
+  for (let ty = 0; ty < imgH; ty += stepY) {
+    for (let tx = 0; tx < imgW; tx += stepX) {
+      const tileW = Math.min(TILE_SIZE, imgW - tx);
+      const tileH = Math.min(TILE_SIZE, imgH - ty);
+
+      off.width = tileW;
+      off.height = tileH;
+      octx.clearRect(0, 0, tileW, tileH);
+      octx.drawImage(imageElement, tx, ty, tileW, tileH, 0, 0, tileW, tileH);
+
+      // Run detector on the tile
+      const preds = await detector.estimateFaces(off, false);
+      // Map predictions back to full image coordinates
+      for (const p of preds) {
+        const face = await predictionToFace(p, 1, 1, tx, ty, imgW, imgH);
+        if (face) found.push(face);
+      }
+    }
+  }
+
+  console.log(`Tiled detection found ${found.length} raw faces before NMS`);
+  return found;
 };
 
 export const detectFaces = async (imageElement: HTMLImageElement): Promise<DetectedFace[]> => {
@@ -72,64 +175,37 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
       }
     }
 
-    const faces: DetectedFace[] = [];
-    
+    const imgW = imageElement.naturalWidth;
+    const imgH = imageElement.naturalHeight;
+
+    // Convert current predictions to faces
+    const initialFaces: DetectedFace[] = [];
     for (const prediction of predictions) {
-      // Extract coordinates from tensors
-      const topLeft = prediction.topLeft instanceof tf.Tensor ? 
-        await prediction.topLeft.data() : prediction.topLeft;
-      const bottomRight = prediction.bottomRight instanceof tf.Tensor ? 
-        await prediction.bottomRight.data() : prediction.bottomRight;
-        
-      const [x1Raw, y1Raw] = Array.from(topLeft);
-      const [x2Raw, y2Raw] = Array.from(bottomRight);
-      
-      // Apply scaling if we used the downscaled pass
-      const x1 = x1Raw * scaleX;
-      const y1 = y1Raw * scaleY;
-      const x2 = x2Raw * scaleX;
-      const y2 = y2Raw * scaleY;
-      
-      const width = x2 - x1;
-      const height = y2 - y1;
-      
-      // Ensure face dimensions are reasonable
-      if (width < 20 || height < 20) {
-        console.log('Face too small, skipping');
-        continue;
-      }
-      
-      // BlazeFace provides landmarks for eyes, nose, mouth, ears
-      let landmarks;
-      if (prediction.landmarks) {
-        if (prediction.landmarks instanceof tf.Tensor) {
-          const landmarkData = await prediction.landmarks.data();
-          landmarks = [] as Array<{x: number, y: number}>;
-          for (let i = 0; i < landmarkData.length; i += 2) {
-            landmarks.push({ x: landmarkData[i] * scaleX, y: landmarkData[i + 1] * scaleY });
-          }
-        } else {
-          landmarks = prediction.landmarks.map((point: number[]) => ({
-            x: point[0] * scaleX,
-            y: point[1] * scaleY
-          }));
-        }
-      } else {
-        landmarks = await generateDetailedLandmarks({ x: x1, y: y1, width, height });
-      }
-      
-      faces.push({
-        x: Math.max(0, x1),
-        y: Math.max(0, y1),
-        width: Math.min(imageElement.naturalWidth - x1, width),
-        height: Math.min(imageElement.naturalHeight - y1, height),
-        confidence: Array.isArray(prediction.probability) ? prediction.probability[0] : 0.9,
-        landmarks,
-      });
+      const face = await predictionToFace(prediction, scaleX, scaleY, 0, 0, imgW, imgH);
+      if (face) initialFaces.push(face);
     }
-    
-    console.log(`Successfully processed ${faces.length} valid faces with landmarks`);
-    return faces;
+
+    let allFaces = [...initialFaces];
+
+    // If still <=1 face, run tiled detection to catch smaller faces
+    if (allFaces.length <= 1) {
+      console.log('Few faces detected; running tiled multi-pass...');
+      const tiledFaces = await detectWithTiling(detector, imageElement);
+      allFaces = [...allFaces, ...tiledFaces];
+    }
+
+    // Merge duplicates using NMS
+    const mergedFaces = nms(allFaces, 0.35);
+    console.log(`Successfully processed ${mergedFaces.length} valid faces with landmarks (after NMS)`);
+
+    // Ensure landmarks exist
+    for (const face of mergedFaces) {
+      if (!face.landmarks || face.landmarks.length === 0) {
+        face.landmarks = await generateDetailedLandmarks(face);
+      }
+    }
+
+    return mergedFaces;
   } catch (error) {
     console.error('Error with BlazeFace detection:', error);
     console.log('Providing fallback face detection for demo');
