@@ -19,8 +19,12 @@ const initializeDetector = async () => {
       // Initialize TensorFlow.js
       await tf.ready();
       
-      // Load BlazeFace model
-      model = await blazeface.load();
+      // Load BlazeFace model with multi-face friendly settings
+      model = await blazeface.load({
+        maxFaces: 10,          // allow many faces
+        iouThreshold: 0.3,     // NMS threshold
+        scoreThreshold: 0.6    // lower threshold to catch more faces
+      });
       console.log('BlazeFace detector initialized successfully');
     } catch (error) {
       console.error('Failed to initialize BlazeFace detector:', error);
@@ -36,12 +40,38 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
     
     const detector = await initializeDetector();
     
-    console.log('Running detection on image:', imageElement.naturalWidth, 'x', imageElement.naturalHeight);
-    
-    // Detect faces using BlazeFace
-    const predictions = await detector.estimateFaces(imageElement, false);
-    console.log(`BlazeFace detected ${predictions.length} faces`);
-    
+    // Prepare input and allow a second-pass downscale if needed
+    let input: HTMLImageElement | HTMLCanvasElement = imageElement;
+    let scaleX = 1;
+    let scaleY = 1;
+
+    // First pass
+    let predictions = await detector.estimateFaces(input, false);
+    console.log(`BlazeFace detected ${predictions.length} faces (pass 1)`);
+
+    // If we only got 0-1 face, try a downscaled second pass to improve small/multi-face scenes
+    if (predictions.length <= 1 && imageElement.naturalWidth > 640) {
+      const targetWidth = 640;
+      const ratio = targetWidth / imageElement.naturalWidth;
+      const targetHeight = Math.round(imageElement.naturalHeight * ratio);
+
+      const off = document.createElement('canvas');
+      off.width = targetWidth;
+      off.height = targetHeight;
+      const octx = off.getContext('2d');
+      if (octx) {
+        octx.drawImage(imageElement, 0, 0, targetWidth, targetHeight);
+        const secondary = await detector.estimateFaces(off, false);
+        console.log(`BlazeFace detected ${secondary.length} faces (pass 2 downscaled)`);
+        if (secondary.length > predictions.length) {
+          input = off;
+          predictions = secondary;
+          scaleX = imageElement.naturalWidth / targetWidth;
+          scaleY = imageElement.naturalHeight / targetHeight;
+        }
+      }
+    }
+
     const faces: DetectedFace[] = [];
     
     for (const prediction of predictions) {
@@ -51,8 +81,14 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
       const bottomRight = prediction.bottomRight instanceof tf.Tensor ? 
         await prediction.bottomRight.data() : prediction.bottomRight;
         
-      const [x1, y1] = Array.from(topLeft);
-      const [x2, y2] = Array.from(bottomRight);
+      const [x1Raw, y1Raw] = Array.from(topLeft);
+      const [x2Raw, y2Raw] = Array.from(bottomRight);
+      
+      // Apply scaling if we used the downscaled pass
+      const x1 = x1Raw * scaleX;
+      const y1 = y1Raw * scaleY;
+      const x2 = x2Raw * scaleX;
+      const y2 = y2Raw * scaleY;
       
       const width = x2 - x1;
       const height = y2 - y1;
@@ -68,14 +104,14 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
       if (prediction.landmarks) {
         if (prediction.landmarks instanceof tf.Tensor) {
           const landmarkData = await prediction.landmarks.data();
-          landmarks = [];
+          landmarks = [] as Array<{x: number, y: number}>;
           for (let i = 0; i < landmarkData.length; i += 2) {
-            landmarks.push({ x: landmarkData[i], y: landmarkData[i + 1] });
+            landmarks.push({ x: landmarkData[i] * scaleX, y: landmarkData[i + 1] * scaleY });
           }
         } else {
           landmarks = prediction.landmarks.map((point: number[]) => ({
-            x: point[0],
-            y: point[1]
+            x: point[0] * scaleX,
+            y: point[1] * scaleY
           }));
         }
       } else {
