@@ -25,7 +25,7 @@ const initializeDetector = async () => {
       model = await blazeface.load({
         maxFaces: 10,          // allow many faces
         iouThreshold: 0.3,     // NMS threshold
-        scoreThreshold: 0.5    // slightly lower to catch more faces
+        scoreThreshold: 0.75   // higher threshold for better accuracy
       });
       console.log('BlazeFace detector initialized successfully');
     } catch (error) {
@@ -60,7 +60,7 @@ const predictionToFace = async (
   const width = x2 - x1;
   const height = y2 - y1;
 
-  if (width < 20 || height < 20) {
+  if (width < 30 || height < 30) {
     return null;
   }
 
@@ -195,7 +195,7 @@ export const detectFaces = async (imageElement: HTMLImageElement): Promise<Detec
     }
 
     // Merge duplicates using NMS
-    const mergedFaces = nms(allFaces, 0.35);
+    const mergedFaces = nms(allFaces, 0.25);
     console.log(`Successfully processed ${mergedFaces.length} valid faces with landmarks (after NMS)`);
 
     // Ensure landmarks exist
