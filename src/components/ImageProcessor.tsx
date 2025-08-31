@@ -44,10 +44,38 @@ const applyCensoring = (
       break;
       
     case 'eye-bar':
-      const eyeBarHeight = height * 0.3;
-      const eyeBarY = y + height * 0.25;
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(x, eyeBarY, width, eyeBarHeight);
+      // Use landmarks if available for precise eye positioning
+      if (face.landmarks && face.landmarks.length > 0) {
+        // Find eye landmarks (typically the first few points are eyes)
+        const eyeLandmarks = face.landmarks.slice(0, 6); // Get first 6 landmarks which include eyes
+        
+        if (eyeLandmarks.length >= 2) {
+          // Calculate eye region bounds from landmarks
+          const eyeYPositions = eyeLandmarks.map(p => p.y);
+          const minEyeY = Math.min(...eyeYPositions);
+          const maxEyeY = Math.max(...eyeYPositions);
+          
+          // Add some padding around the eye area
+          const eyePadding = height * 0.05;
+          const eyeBarY = minEyeY - eyePadding;
+          const eyeBarHeight = (maxEyeY - minEyeY) + (eyePadding * 2);
+          
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(x, eyeBarY, width, eyeBarHeight);
+        } else {
+          // Fallback to proportional positioning
+          const eyeBarHeight = height * 0.25;
+          const eyeBarY = y + height * 0.3;
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(x, eyeBarY, width, eyeBarHeight);
+        }
+      } else {
+        // Fallback when no landmarks available
+        const eyeBarHeight = height * 0.25;
+        const eyeBarY = y + height * 0.3;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(x, eyeBarY, width, eyeBarHeight);
+      }
       break;
       
     case 'pixelated-eyes':
