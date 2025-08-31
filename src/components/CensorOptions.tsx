@@ -2,9 +2,9 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Square, Minus, Eye, User, Shuffle, Zap } from 'lucide-react';
+import { Square, Minus, Eye, User, Shuffle, Zap, MapPin } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'wireframe';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'wireframe' | 'show-landmarks';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
@@ -52,6 +52,12 @@ const censorOptions = [
     label: 'Wireframe',
     description: 'Geometric mesh overlay',
     icon: Zap,
+  },
+  {
+    type: 'show-landmarks' as CensorType,
+    label: 'Show Landmarks',
+    description: 'Display detected facial points',
+    icon: MapPin,
   },
 ];
 

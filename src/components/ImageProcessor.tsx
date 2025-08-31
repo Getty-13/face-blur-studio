@@ -95,6 +95,10 @@ const applyCensoring = (
     case 'wireframe':
       drawWireframeOverlay(ctx, face);
       break;
+      
+    case 'show-landmarks':
+      drawLandmarksOnly(ctx, face);
+      break;
   }
 };
 
@@ -223,6 +227,74 @@ const pixelSortRegion = (
   }
   
   ctx.putImageData(imageData, x, y);
+};
+
+const drawLandmarksOnly = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace
+) => {
+  if (!face.landmarks || face.landmarks.length === 0) {
+    // If no landmarks, draw a simple indicator showing the face bounds
+    ctx.strokeStyle = '#ff0000';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(face.x, face.y, face.width, face.height);
+    ctx.setLineDash([]);
+    
+    // Add text indicating no landmarks
+    ctx.fillStyle = '#ff0000';
+    ctx.font = '12px Arial';
+    ctx.fillText('No landmarks detected', face.x + 5, face.y + 15);
+    return;
+  }
+  
+  const landmarks = face.landmarks;
+  
+  // Draw landmark points with different colors and sizes for better visibility
+  landmarks.forEach((point, index) => {
+    // Color code different landmark groups
+    let color = '#00ff00'; // Default green
+    let size = 3;
+    
+    if (index < 6) {
+      color = '#ff0000'; // Red for eye area landmarks
+      size = 4;
+    } else if (index < 12) {
+      color = '#0000ff'; // Blue for nose area
+      size = 3;
+    } else {
+      color = '#ffff00'; // Yellow for mouth area
+      size = 3;
+    }
+    
+    // Draw a circle for each landmark
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Add a small outline for better visibility
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Add landmark number for debugging
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '8px Arial';
+    ctx.fillText(index.toString(), point.x + 5, point.y - 5);
+  });
+  
+  // Draw face bounding box for reference
+  ctx.strokeStyle = '#00ff00';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 2]);
+  ctx.strokeRect(face.x, face.y, face.width, face.height);
+  ctx.setLineDash([]);
+  
+  // Add face info text
+  ctx.fillStyle = '#00ff00';
+  ctx.font = '10px Arial';
+  ctx.fillText(`Face: ${landmarks.length} landmarks`, face.x, face.y - 5);
 };
 
 const drawWireframeOverlay = (
