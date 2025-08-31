@@ -179,7 +179,13 @@ const pixelSortRegion = (
   height: number,
   intensity: number
 ) => {
-  const imageData = ctx.getImageData(x, y, width, height);
+  // Round and clamp region to integer pixel grid to avoid 1px-high effects
+  const ix = Math.max(0, Math.floor(x));
+  const iy = Math.max(0, Math.floor(y));
+  const iw = Math.max(1, Math.floor(width));
+  const ih = Math.max(1, Math.floor(height));
+
+  const imageData = ctx.getImageData(ix, iy, iw, ih);
   const data = imageData.data;
   
   // Convert intensity from 0-100 to a more usable range
@@ -187,7 +193,7 @@ const pixelSortRegion = (
   const segmentSizeMultiplier = Math.max(0.1, intensity / 100);
   
   // Process each row of pixels (horizontal sorting like in Python version)
-  for (let row = 0; row < height; row++) {
+  for (let row = 0; row < ih; row++) {
     // Make the effect more aggressive - process more rows
     const rowSkip = Math.max(1, Math.floor(6 - (intensity / 20))); // More rows processed at higher intensity
     const shouldSort = (row % rowSkip) === 0;
@@ -197,13 +203,13 @@ const pixelSortRegion = (
     }
     
     // Create larger, more visible segments
-    const baseSegmentSize = Math.floor(width * 0.6); // Larger base size
+    const baseSegmentSize = Math.floor(iw * 0.6); // Larger base size
     const segmentSize = Math.floor(baseSegmentSize * (intensity / 100));
     const minSegmentSize = Math.max(20, segmentSize); // Minimum 20 pixels for visibility
     
     // Process multiple segments in this row for more dramatic effect
-    for (let startCol = 0; startCol < width - minSegmentSize; startCol += Math.floor(minSegmentSize * 0.5)) {
-      const endCol = Math.min(width, startCol + minSegmentSize);
+    for (let startCol = 0; startCol < iw - minSegmentSize; startCol += Math.floor(minSegmentSize * 0.5)) {
+      const endCol = Math.min(iw, startCol + minSegmentSize);
       
       if (endCol - startCol < 10) continue; // Skip if segment too small
       
@@ -214,7 +220,7 @@ const pixelSortRegion = (
       // Extract pixels from this row segment
       const rowPixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
       for (let col = startCol; col < endCol; col++) {
-        const pixelIndex = (row * width + col) * 4;
+        const pixelIndex = (row * iw + col) * 4;
         if (pixelIndex + 3 < data.length) {
           const r = data[pixelIndex];
           const g = data[pixelIndex + 1];
@@ -236,9 +242,9 @@ const pixelSortRegion = (
       // Put sorted pixels back
       for (let i = 0; i < rowPixels.length; i++) {
         const col = startCol + i;
-        if (col >= width) break;
+        if (col >= iw) break;
         
-        const pixelIndex = (row * width + col) * 4;
+        const pixelIndex = (row * iw + col) * 4;
         if (pixelIndex + 3 < data.length) {
           const sortedPixel = rowPixels[i];
           
@@ -251,7 +257,7 @@ const pixelSortRegion = (
     }
   }
   
-  ctx.putImageData(imageData, x, y);
+  ctx.putImageData(imageData, ix, iy);
 };
 
 const drawLandmarksOnly = (
