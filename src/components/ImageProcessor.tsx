@@ -188,22 +188,28 @@ const pixelSortRegion = (
   
   // Process each row of pixels (horizontal sorting like in Python version)
   for (let row = 0; row < height; row++) {
-    // Use a more predictable pattern instead of pure random
-    const shouldSort = (row % Math.max(1, Math.floor(10 - (intensity / 10)))) === 0;
+    // Make the effect more aggressive - process more rows
+    const rowSkip = Math.max(1, Math.floor(6 - (intensity / 20))); // More rows processed at higher intensity
+    const shouldSort = (row % rowSkip) === 0;
     
     if (!shouldSort) {
       continue; // Skip this row
     }
     
-    // Create more predictable segments based on intensity
-    const segmentSize = Math.floor(width * segmentSizeMultiplier * 0.8);
-    const minSegmentSize = Math.max(10, segmentSize);
+    // Create larger, more visible segments
+    const baseSegmentSize = Math.floor(width * 0.6); // Larger base size
+    const segmentSize = Math.floor(baseSegmentSize * (intensity / 100));
+    const minSegmentSize = Math.max(20, segmentSize); // Minimum 20 pixels for visibility
     
-    // Process multiple segments in this row
-    for (let startCol = 0; startCol < width - minSegmentSize; startCol += Math.floor(minSegmentSize * 0.7)) {
+    // Process multiple segments in this row for more dramatic effect
+    for (let startCol = 0; startCol < width - minSegmentSize; startCol += Math.floor(minSegmentSize * 0.5)) {
       const endCol = Math.min(width, startCol + minSegmentSize);
       
-      if (endCol - startCol < 5) continue; // Skip if segment too small
+      if (endCol - startCol < 10) continue; // Skip if segment too small
+      
+      // Add some randomness to make it more glitchy
+      const shouldSortSegment = Math.random() < (intensity / 100);
+      if (!shouldSortSegment) continue;
       
       // Extract pixels from this row segment
       const rowPixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
@@ -217,12 +223,12 @@ const pixelSortRegion = (
           
           rowPixels.push({
             r, g, b, a,
-            brightness: r + g + b // Python version sorts by R + G + B
+            brightness: (r * 0.299 + g * 0.587 + b * 0.114) // Use proper luminance formula for better sorting
           });
         }
       }
       
-      if (rowPixels.length < 2) continue;
+      if (rowPixels.length < 3) continue; // Need at least 3 pixels for visible effect
       
       // Sort pixels by brightness (same as Python quicksort approach)
       rowPixels.sort((a, b) => a.brightness - b.brightness);
