@@ -170,7 +170,7 @@ const pixelateRegion = (
   ctx.putImageData(imageData, x, y);
 };
 
-// Enhanced pixel sorting based on lenssort/pixelsort Python library approach
+// True lenssort/pixelsort horizontal streaking effect
 const pixelSortRegion = (
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -179,7 +179,7 @@ const pixelSortRegion = (
   height: number,
   intensity: number
 ) => {
-  // Round and clamp region to integer pixel grid to avoid 1px-high effects
+  // Round and clamp region to integer pixel grid
   const ix = Math.max(0, Math.floor(x));
   const iy = Math.max(0, Math.floor(y));
   const iw = Math.max(1, Math.floor(width));
@@ -188,71 +188,94 @@ const pixelSortRegion = (
   const imageData = ctx.getImageData(ix, iy, iw, ih);
   const data = imageData.data;
   
-  // Convert intensity from 0-100 to a more usable range
-  const sortProbability = intensity / 100;
-  const segmentSizeMultiplier = Math.max(0.1, intensity / 100);
+  // Convert intensity to useful parameters
+  const brightnessThreshold = 60 + (intensity * 0.6); // Dynamic threshold based on intensity
+  const rowStep = Math.max(1, Math.floor(4 - (intensity / 30))); // Process more rows at higher intensity
   
-  // Process each row of pixels (horizontal sorting like in Python version)
-  for (let row = 0; row < ih; row++) {
-    // Make the effect more aggressive - process more rows
-    const rowSkip = Math.max(1, Math.floor(6 - (intensity / 20))); // More rows processed at higher intensity
-    const shouldSort = (row % rowSkip) === 0;
+  // Process rows with horizontal streaking effect
+  for (let row = 0; row < ih; row += rowStep) {
+    // Extract entire row of pixels
+    const rowPixels: Array<{r: number, g: number, b: number, a: number, brightness: number, originalIndex: number}> = [];
     
-    if (!shouldSort) {
-      continue; // Skip this row
+    for (let col = 0; col < iw; col++) {
+      const pixelIndex = (row * iw + col) * 4;
+      if (pixelIndex + 3 < data.length) {
+        const r = data[pixelIndex];
+        const g = data[pixelIndex + 1];
+        const b = data[pixelIndex + 2];
+        const a = data[pixelIndex + 3];
+        const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+        
+        rowPixels.push({
+          r, g, b, a, brightness,
+          originalIndex: col
+        });
+      }
     }
     
-    // Create larger, more visible segments
-    const baseSegmentSize = Math.floor(iw * 0.6); // Larger base size
-    const segmentSize = Math.floor(baseSegmentSize * (intensity / 100));
-    const minSegmentSize = Math.max(20, segmentSize); // Minimum 20 pixels for visibility
+    if (rowPixels.length === 0) continue;
     
-    // Process multiple segments in this row for more dramatic effect
-    for (let startCol = 0; startCol < iw - minSegmentSize; startCol += Math.floor(minSegmentSize * 0.5)) {
-      const endCol = Math.min(iw, startCol + minSegmentSize);
+    // Find intervals to sort based on brightness thresholds (lenssort approach)
+    const intervals: Array<{start: number, end: number}> = [];
+    let intervalStart = -1;
+    
+    for (let i = 0; i < rowPixels.length; i++) {
+      const pixel = rowPixels[i];
+      const shouldSort = pixel.brightness > brightnessThreshold || 
+                        pixel.brightness < (255 - brightnessThreshold);
       
-      if (endCol - startCol < 10) continue; // Skip if segment too small
-      
-      // Add some randomness to make it more glitchy
-      const shouldSortSegment = Math.random() < (intensity / 100);
-      if (!shouldSortSegment) continue;
-      
-      // Extract pixels from this row segment
-      const rowPixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
-      for (let col = startCol; col < endCol; col++) {
-        const pixelIndex = (row * iw + col) * 4;
-        if (pixelIndex + 3 < data.length) {
-          const r = data[pixelIndex];
-          const g = data[pixelIndex + 1];
-          const b = data[pixelIndex + 2];
-          const a = data[pixelIndex + 3];
-          
-          rowPixels.push({
-            r, g, b, a,
-            brightness: (r * 0.299 + g * 0.587 + b * 0.114) // Use proper luminance formula for better sorting
-          });
+      if (shouldSort && intervalStart === -1) {
+        intervalStart = i;
+      } else if (!shouldSort && intervalStart !== -1) {
+        // End of interval
+        if (i - intervalStart > 5) { // Only sort if interval is meaningful
+          intervals.push({start: intervalStart, end: i - 1});
+        }
+        intervalStart = -1;
+      }
+    }
+    
+    // Close final interval if needed
+    if (intervalStart !== -1 && rowPixels.length - intervalStart > 5) {
+      intervals.push({start: intervalStart, end: rowPixels.length - 1});
+    }
+    
+    // If no natural intervals found, create some based on intensity
+    if (intervals.length === 0 && intensity > 30) {
+      const segmentSize = Math.floor(iw * (intensity / 200)); // Smaller segments at lower intensity
+      for (let start = 0; start < rowPixels.length - segmentSize; start += segmentSize * 2) {
+        intervals.push({
+          start: start,
+          end: Math.min(start + segmentSize, rowPixels.length - 1)
+        });
+      }
+    }
+    
+    // Sort each interval by brightness to create horizontal streaks
+    intervals.forEach(interval => {
+      if (interval.end > interval.start) {
+        const intervalPixels = rowPixels.slice(interval.start, interval.end + 1);
+        intervalPixels.sort((a, b) => a.brightness - b.brightness);
+        
+        // Put sorted pixels back into the row
+        for (let i = 0; i < intervalPixels.length; i++) {
+          const targetIndex = interval.start + i;
+          if (targetIndex < rowPixels.length) {
+            rowPixels[targetIndex] = intervalPixels[i];
+          }
         }
       }
-      
-      if (rowPixels.length < 3) continue; // Need at least 3 pixels for visible effect
-      
-      // Sort pixels by brightness (same as Python quicksort approach)
-      rowPixels.sort((a, b) => a.brightness - b.brightness);
-      
-      // Put sorted pixels back
-      for (let i = 0; i < rowPixels.length; i++) {
-        const col = startCol + i;
-        if (col >= iw) break;
-        
-        const pixelIndex = (row * iw + col) * 4;
-        if (pixelIndex + 3 < data.length) {
-          const sortedPixel = rowPixels[i];
-          
-          data[pixelIndex] = sortedPixel.r;
-          data[pixelIndex + 1] = sortedPixel.g;
-          data[pixelIndex + 2] = sortedPixel.b;
-          data[pixelIndex + 3] = sortedPixel.a;
-        }
+    });
+    
+    // Write the sorted row back to image data
+    for (let col = 0; col < Math.min(iw, rowPixels.length); col++) {
+      const pixelIndex = (row * iw + col) * 4;
+      if (pixelIndex + 3 < data.length) {
+        const pixel = rowPixels[col];
+        data[pixelIndex] = pixel.r;
+        data[pixelIndex + 1] = pixel.g;
+        data[pixelIndex + 2] = pixel.b;
+        data[pixelIndex + 3] = pixel.a;
       }
     }
   }
