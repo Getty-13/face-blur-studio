@@ -92,6 +92,10 @@ const applyCensoring = (
       pixelSortRegion(ctx, x, y, width, height, sortIntensity);
       break;
       
+    case 'pixelsort-eye-bar':
+      pixelSortEyeRegion(ctx, face, sortIntensity);
+      break;
+      
     case 'wireframe':
       drawWireframeOverlay(ctx, face);
       break;
@@ -268,6 +272,143 @@ const pixelSortRegion = (
     });
     
     // Write the sorted row back to image data
+    for (let col = 0; col < Math.min(iw, rowPixels.length); col++) {
+      const pixelIndex = (row * iw + col) * 4;
+      if (pixelIndex + 3 < data.length) {
+        const pixel = rowPixels[col];
+        data[pixelIndex] = pixel.r;
+        data[pixelIndex + 1] = pixel.g;
+        data[pixelIndex + 2] = pixel.b;
+        data[pixelIndex + 3] = pixel.a;
+      }
+    }
+  }
+  
+  ctx.putImageData(imageData, ix, iy);
+};
+
+// Pixel sort specifically for eye region with precise targeting
+const pixelSortEyeRegion = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace,
+  intensity: number
+) => {
+  const { x, y, width, height } = face;
+  
+  // Calculate eye region bounds - more precise targeting
+  let eyeBarY, eyeBarHeight;
+  
+  if (face.landmarks && face.landmarks.length > 0) {
+    // Use landmarks for precise eye positioning
+    const eyeLandmarks = face.landmarks.slice(0, 6);
+    
+    if (eyeLandmarks.length >= 2) {
+      const eyeYPositions = eyeLandmarks.map(p => p.y);
+      const minEyeY = Math.min(...eyeYPositions);
+      const maxEyeY = Math.max(...eyeYPositions);
+      
+      // Slightly smaller padding for more precise targeting
+      const eyePadding = height * 0.08;
+      eyeBarY = minEyeY - eyePadding;
+      eyeBarHeight = (maxEyeY - minEyeY) + (eyePadding * 2);
+    } else {
+      // Fallback to proportional positioning
+      eyeBarHeight = height * 0.3;
+      eyeBarY = y + height * 0.25;
+    }
+  } else {
+    // Fallback when no landmarks available
+    eyeBarHeight = height * 0.3;
+    eyeBarY = y + height * 0.25;
+  }
+  
+  // Ensure bounds are within the face region
+  eyeBarY = Math.max(y, eyeBarY);
+  eyeBarHeight = Math.min(height, eyeBarHeight);
+  
+  // Apply aggressive pixel sorting to the eye region
+  const ix = Math.max(0, Math.floor(x));
+  const iy = Math.max(0, Math.floor(eyeBarY));
+  const iw = Math.max(1, Math.floor(width));
+  const ih = Math.max(1, Math.floor(eyeBarHeight));
+
+  const imageData = ctx.getImageData(ix, iy, iw, ih);
+  const data = imageData.data;
+  
+  // More aggressive settings for eye bar effect
+  const brightnessThreshold = 40 + (intensity * 0.4); // Lower threshold for more sorting
+  const rowStep = 1; // Process every row for dense streaking
+  
+  // Process every row for maximum horizontal streaking density
+  for (let row = 0; row < ih; row += rowStep) {
+    const rowPixels: Array<{r: number, g: number, b: number, a: number, brightness: number}> = [];
+    
+    // Extract row pixels
+    for (let col = 0; col < iw; col++) {
+      const pixelIndex = (row * iw + col) * 4;
+      if (pixelIndex + 3 < data.length) {
+        const r = data[pixelIndex];
+        const g = data[pixelIndex + 1];
+        const b = data[pixelIndex + 2];
+        const a = data[pixelIndex + 3];
+        const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+        
+        rowPixels.push({ r, g, b, a, brightness });
+      }
+    }
+    
+    if (rowPixels.length === 0) continue;
+    
+    // Create smaller, more frequent intervals for denser streaking
+    const intervals: Array<{start: number, end: number}> = [];
+    const segmentSize = Math.max(8, Math.floor(iw * (30 / intensity))); // Smaller segments at higher intensity
+    
+    // Always create intervals for eye bar effect - don't rely on brightness detection alone
+    for (let start = 0; start < rowPixels.length; start += segmentSize) {
+      const end = Math.min(start + segmentSize * 2, rowPixels.length - 1);
+      if (end > start + 4) { // Only sort meaningful intervals
+        intervals.push({ start, end });
+      }
+    }
+    
+    // Also add brightness-based intervals for natural edge detection
+    let intervalStart = -1;
+    for (let i = 0; i < rowPixels.length; i++) {
+      const pixel = rowPixels[i];
+      const shouldSort = pixel.brightness > brightnessThreshold || 
+                        pixel.brightness < (255 - brightnessThreshold);
+      
+      if (shouldSort && intervalStart === -1) {
+        intervalStart = i;
+      } else if (!shouldSort && intervalStart !== -1) {
+        if (i - intervalStart > 3) { // Smaller minimum interval
+          intervals.push({start: intervalStart, end: i - 1});
+        }
+        intervalStart = -1;
+      }
+    }
+    
+    if (intervalStart !== -1 && rowPixels.length - intervalStart > 3) {
+      intervals.push({start: intervalStart, end: rowPixels.length - 1});
+    }
+    
+    // Sort each interval by brightness for horizontal streaking
+    intervals.forEach(interval => {
+      if (interval.end > interval.start) {
+        const intervalPixels = rowPixels.slice(interval.start, interval.end + 1);
+        intervalPixels.sort((a, b) => a.brightness - b.brightness);
+        
+        // Put sorted pixels back
+        for (let i = 0; i < intervalPixels.length; i++) {
+          const targetIndex = interval.start + i;
+          if (targetIndex < rowPixels.length) {
+            rowPixels[targetIndex] = intervalPixels[i];
+          }
+        }
+      }
+    });
+    
+    // Write the sorted row back
     for (let col = 0; col < Math.min(iw, rowPixels.length); col++) {
       const pixelIndex = (row * iw + col) * 4;
       if (pixelIndex + 3 < data.length) {

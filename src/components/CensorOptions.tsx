@@ -2,9 +2,9 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Square, Minus, Eye, User, Shuffle, Zap, MapPin } from 'lucide-react';
+import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'wireframe' | 'show-landmarks';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'wireframe' | 'show-landmarks';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
@@ -48,6 +48,12 @@ const censorOptions = [
     icon: Shuffle,
   },
   {
+    type: 'pixelsort-eye-bar' as CensorType,
+    label: 'Pixelsort Eye Bar',
+    description: 'Horizontal streaks over eyes',
+    icon: ScanLine,
+  },
+  {
     type: 'wireframe' as CensorType,
     label: 'Wireframe',
     description: 'Geometric mesh overlay',
@@ -71,7 +77,7 @@ export const CensorOptions: React.FC<CensorOptionsProps> = ({
   onSortIntensityChange,
 }) => {
   const needsPixelSlider = ['pixelated-eyes', 'pixelated-face'].includes(selectedType);
-  const needsSortSlider = selectedType === 'pixel-sort';
+  const needsSortSlider = ['pixel-sort', 'pixelsort-eye-bar'].includes(selectedType);
   return (
     <Card className="p-6 shadow-card">
       <div className="mb-4">
