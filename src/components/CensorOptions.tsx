@@ -2,9 +2,9 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine } from 'lucide-react';
+import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine, Focus } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'wireframe' | 'show-landmarks';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'blur-face' | 'blur-eyes' | 'wireframe' | 'show-landmarks';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
@@ -52,6 +52,18 @@ const censorOptions = [
     label: 'Pixelsort Eye Bar',
     description: 'Horizontal streaks over eyes',
     icon: ScanLine,
+  },
+  {
+    type: 'blur-face' as CensorType,
+    label: 'Blur Face',
+    description: 'Gaussian blur over entire face',
+    icon: Focus,
+  },
+  {
+    type: 'blur-eyes' as CensorType,
+    label: 'Blur Eyes',
+    description: 'Gaussian blur over eye area',
+    icon: Focus,
   },
   {
     type: 'wireframe' as CensorType,

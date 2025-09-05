@@ -44,35 +44,7 @@ const applyCensoring = (
       break;
       
     case 'eye-bar':
-      // Use landmarks if available for precise eye positioning
-      if (face.landmarks && face.landmarks.length >= 2) {
-        // Use only the first two landmarks which are the eye centers
-        const leftEye = face.landmarks[0];
-        const rightEye = face.landmarks[1];
-        
-        // Calculate eye bar dimensions based on actual eye positions (increased by 20%)
-        const eyeY = Math.min(leftEye.y, rightEye.y);
-        const eyeBarHeight = Math.max(10, height * 0.096); // Increased from 8px to 10px min, 8% to 9.6%
-        const eyeBarY = eyeY - eyeBarHeight / 2;
-        
-        // Calculate horizontal bounds based on eye positions with more padding (increased by 20%)
-        const leftmostX = Math.min(leftEye.x, rightEye.x) - width * 0.18; // Increased from 0.15 to 0.18
-        const rightmostX = Math.max(leftEye.x, rightEye.x) + width * 0.18; // Increased from 0.15 to 0.18
-        const eyeBarX = Math.max(x, leftmostX);
-        const eyeBarWidth = Math.min(x + width, rightmostX) - eyeBarX;
-        
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight);
-      } else {
-        // Improved fallback: more precise eye positioning (increased by 20%)
-        const eyeBarHeight = height * 0.144; // Increased from 0.12 to 0.144
-        const eyeBarY = y + height * 0.35; // Eyes are typically at 35% down from top of face
-        const eyeBarX = x + width * 0.08; // Reduced from 0.1 to 0.08 for wider coverage
-        const eyeBarWidth = width * 0.84; // Increased from 0.8 to 0.84
-        
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight);
-      }
+      drawRotatedEyeBar(ctx, face, width, height);
       break;
       
     case 'pixelated-eyes':
@@ -95,6 +67,16 @@ const applyCensoring = (
       
     case 'wireframe':
       drawWireframeOverlay(ctx, face);
+      break;
+      
+    case 'blur-face':
+      blurRegion(ctx, x, y, width, height, 8);
+      break;
+      
+    case 'blur-eyes':
+      const blurEyeRegionHeight = height * 0.4;
+      const blurEyeRegionY = y + height * 0.2;
+      blurRegion(ctx, x, blurEyeRegionY, width, blurEyeRegionHeight, 6);
       break;
       
     case 'show-landmarks':
@@ -416,6 +398,136 @@ const pixelSortEyeRegion = (
         data[pixelIndex + 3] = pixel.a;
       }
     }
+  }
+  
+  ctx.putImageData(imageData, ix, iy);
+};
+
+// Rotated eye bar that follows head tilt
+const drawRotatedEyeBar = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace,
+  faceWidth: number,
+  faceHeight: number
+) => {
+  if (face.landmarks && face.landmarks.length >= 2) {
+    const leftEye = face.landmarks[0];
+    const rightEye = face.landmarks[1];
+    
+    // Calculate angle between eyes
+    const dx = rightEye.x - leftEye.x;
+    const dy = rightEye.y - leftEye.y;
+    const angle = Math.atan2(dy, dx);
+    
+    // Calculate center point between eyes
+    const centerX = (leftEye.x + rightEye.x) / 2;
+    const centerY = (leftEye.y + rightEye.y) / 2;
+    
+    // Calculate bar dimensions
+    const eyeBarHeight = Math.max(10, faceHeight * 0.096);
+    const eyeDistance = Math.sqrt(dx * dx + dy * dy);
+    const eyeBarWidth = eyeDistance + (faceWidth * 0.36); // Padding on both sides
+    
+    // Save canvas state
+    ctx.save();
+    
+    // Translate to center and rotate
+    ctx.translate(centerX, centerY);
+    ctx.rotate(angle);
+    
+    // Draw rotated rectangle centered at origin
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-eyeBarWidth / 2, -eyeBarHeight / 2, eyeBarWidth, eyeBarHeight);
+    
+    // Restore canvas state
+    ctx.restore();
+  } else {
+    // Fallback to regular horizontal bar
+    const { x, y, width, height } = face;
+    const eyeBarHeight = height * 0.144;
+    const eyeBarY = y + height * 0.35;
+    const eyeBarX = x + width * 0.08;
+    const eyeBarWidth = width * 0.84;
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight);
+  }
+};
+
+// Simple blur effect using box blur approximation
+const blurRegion = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) => {
+  // Round and clamp region
+  const ix = Math.max(0, Math.floor(x));
+  const iy = Math.max(0, Math.floor(y));
+  const iw = Math.max(1, Math.floor(width));
+  const ih = Math.max(1, Math.floor(height));
+
+  const imageData = ctx.getImageData(ix, iy, iw, ih);
+  const data = imageData.data;
+  const original = new Uint8ClampedArray(data);
+  
+  // Apply multiple passes of box blur for Gaussian approximation
+  for (let pass = 0; pass < 3; pass++) {
+    // Horizontal pass
+    for (let row = 0; row < ih; row++) {
+      for (let col = 0; col < iw; col++) {
+        let r = 0, g = 0, b = 0, a = 0, count = 0;
+        
+        for (let k = -radius; k <= radius; k++) {
+          const sampleCol = Math.max(0, Math.min(iw - 1, col + k));
+          const idx = (row * iw + sampleCol) * 4;
+          
+          r += original[idx];
+          g += original[idx + 1];
+          b += original[idx + 2];
+          a += original[idx + 3];
+          count++;
+        }
+        
+        const idx = (row * iw + col) * 4;
+        data[idx] = r / count;
+        data[idx + 1] = g / count;
+        data[idx + 2] = b / count;
+        data[idx + 3] = a / count;
+      }
+    }
+    
+    // Copy blurred data back for next pass
+    original.set(data);
+    
+    // Vertical pass
+    for (let col = 0; col < iw; col++) {
+      for (let row = 0; row < ih; row++) {
+        let r = 0, g = 0, b = 0, a = 0, count = 0;
+        
+        for (let k = -radius; k <= radius; k++) {
+          const sampleRow = Math.max(0, Math.min(ih - 1, row + k));
+          const idx = (sampleRow * iw + col) * 4;
+          
+          r += original[idx];
+          g += original[idx + 1];
+          b += original[idx + 2];
+          a += original[idx + 3];
+          count++;
+        }
+        
+        const idx = (row * iw + col) * 4;
+        data[idx] = r / count;
+        data[idx + 1] = g / count;
+        data[idx + 2] = b / count;
+        data[idx + 3] = a / count;
+      }
+    }
+    
+    // Copy blurred data back for next pass
+    original.set(data);
   }
   
   ctx.putImageData(imageData, ix, iy);
