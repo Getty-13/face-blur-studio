@@ -45,36 +45,33 @@ const applyCensoring = (
       
     case 'eye-bar':
       // Use landmarks if available for precise eye positioning
-      if (face.landmarks && face.landmarks.length > 0) {
-        // Find eye landmarks (typically the first few points are eyes)
-        const eyeLandmarks = face.landmarks.slice(0, 6); // Get first 6 landmarks which include eyes
+      if (face.landmarks && face.landmarks.length >= 2) {
+        // Use only the first two landmarks which are the eye centers
+        const leftEye = face.landmarks[0];
+        const rightEye = face.landmarks[1];
         
-        if (eyeLandmarks.length >= 2) {
-          // Calculate eye region bounds from landmarks
-          const eyeYPositions = eyeLandmarks.map(p => p.y);
-          const minEyeY = Math.min(...eyeYPositions);
-          const maxEyeY = Math.max(...eyeYPositions);
-          
-          // Add some padding around the eye area
-          const eyePadding = height * 0.05;
-          const eyeBarY = minEyeY - eyePadding;
-          const eyeBarHeight = (maxEyeY - minEyeY) + (eyePadding * 2);
-          
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(x, eyeBarY, width, eyeBarHeight);
-        } else {
-          // Fallback to proportional positioning
-          const eyeBarHeight = height * 0.25;
-          const eyeBarY = y + height * 0.3;
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(x, eyeBarY, width, eyeBarHeight);
-        }
-      } else {
-        // Fallback when no landmarks available
-        const eyeBarHeight = height * 0.25;
-        const eyeBarY = y + height * 0.3;
+        // Calculate eye bar dimensions based on actual eye positions
+        const eyeY = Math.min(leftEye.y, rightEye.y);
+        const eyeBarHeight = Math.max(8, height * 0.08); // Minimum 8px height, max 8% of face height
+        const eyeBarY = eyeY - eyeBarHeight / 2;
+        
+        // Calculate horizontal bounds based on eye positions with some padding
+        const leftmostX = Math.min(leftEye.x, rightEye.x) - width * 0.15;
+        const rightmostX = Math.max(leftEye.x, rightEye.x) + width * 0.15;
+        const eyeBarX = Math.max(x, leftmostX);
+        const eyeBarWidth = Math.min(x + width, rightmostX) - eyeBarX;
+        
         ctx.fillStyle = '#000000';
-        ctx.fillRect(x, eyeBarY, width, eyeBarHeight);
+        ctx.fillRect(eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight);
+      } else {
+        // Improved fallback: more precise eye positioning
+        const eyeBarHeight = height * 0.12;
+        const eyeBarY = y + height * 0.35; // Eyes are typically at 35% down from top of face
+        const eyeBarX = x + width * 0.1; // Start 10% in from face edge
+        const eyeBarWidth = width * 0.8; // Cover 80% of face width
+        
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight);
       }
       break;
       
