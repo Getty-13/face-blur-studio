@@ -48,9 +48,7 @@ const applyCensoring = (
       break;
       
     case 'pixelated-eyes':
-      const eyeRegionHeight = height * 0.4;
-      const eyeRegionY = y + height * 0.2;
-      pixelateRegion(ctx, x, eyeRegionY, width, eyeRegionHeight, pixelIntensity);
+      pixelateEyeRegionPrecise(ctx, face, width, height, pixelIntensity);
       break;
       
     case 'pixelated-face':
@@ -74,9 +72,7 @@ const applyCensoring = (
       break;
       
     case 'blur-eyes':
-      const blurEyeRegionHeight = height * 0.4;
-      const blurEyeRegionY = y + height * 0.2;
-      blurRegion(ctx, x, blurEyeRegionY, width, blurEyeRegionHeight, 6);
+      blurEyeRegionPrecise(ctx, face, width, height);
       break;
       
     case 'show-landmarks':
@@ -531,6 +527,75 @@ const blurRegion = (
   }
   
   ctx.putImageData(imageData, ix, iy);
+};
+
+// Precise eye region blur using same logic as eye bar
+const blurEyeRegionPrecise = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace,
+  faceWidth: number,
+  faceHeight: number
+) => {
+  if (face.landmarks && face.landmarks.length >= 2) {
+    const leftEye = face.landmarks[0];
+    const rightEye = face.landmarks[1];
+    
+    // Calculate eye region dimensions based on actual eye positions
+    const eyeY = Math.min(leftEye.y, rightEye.y);
+    const eyeBarHeight = Math.max(10, faceHeight * 0.096);
+    const eyeBarY = eyeY - eyeBarHeight / 2;
+    
+    // Calculate horizontal bounds based on eye positions with padding
+    const leftmostX = Math.min(leftEye.x, rightEye.x) - faceWidth * 0.18;
+    const rightmostX = Math.max(leftEye.x, rightEye.x) + faceWidth * 0.18;
+    const eyeBarX = Math.max(face.x, leftmostX);
+    const eyeBarWidth = Math.min(face.x + faceWidth, rightmostX) - eyeBarX;
+    
+    blurRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, 6);
+  } else {
+    // Fallback: use same proportions as eye bar fallback
+    const eyeBarHeight = faceHeight * 0.144;
+    const eyeBarY = face.y + faceHeight * 0.35;
+    const eyeBarX = face.x + faceWidth * 0.08;
+    const eyeBarWidth = faceWidth * 0.84;
+    
+    blurRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, 6);
+  }
+};
+
+// Precise eye region pixelation using same logic as eye bar
+const pixelateEyeRegionPrecise = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace,
+  faceWidth: number,
+  faceHeight: number,
+  pixelIntensity: number
+) => {
+  if (face.landmarks && face.landmarks.length >= 2) {
+    const leftEye = face.landmarks[0];
+    const rightEye = face.landmarks[1];
+    
+    // Calculate eye region dimensions based on actual eye positions
+    const eyeY = Math.min(leftEye.y, rightEye.y);
+    const eyeBarHeight = Math.max(10, faceHeight * 0.096);
+    const eyeBarY = eyeY - eyeBarHeight / 2;
+    
+    // Calculate horizontal bounds based on eye positions with padding
+    const leftmostX = Math.min(leftEye.x, rightEye.x) - faceWidth * 0.18;
+    const rightmostX = Math.max(leftEye.x, rightEye.x) + faceWidth * 0.18;
+    const eyeBarX = Math.max(face.x, leftmostX);
+    const eyeBarWidth = Math.min(face.x + faceWidth, rightmostX) - eyeBarX;
+    
+    pixelateRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, pixelIntensity);
+  } else {
+    // Fallback: use same proportions as eye bar fallback
+    const eyeBarHeight = faceHeight * 0.144;
+    const eyeBarY = face.y + faceHeight * 0.35;
+    const eyeBarX = face.x + faceWidth * 0.08;
+    const eyeBarWidth = faceWidth * 0.84;
+    
+    pixelateRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, pixelIntensity);
+  }
 };
 
 const drawLandmarksOnly = (
