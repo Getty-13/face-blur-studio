@@ -50,25 +50,25 @@ const applyCensoring = (
         const leftEye = face.landmarks[0];
         const rightEye = face.landmarks[1];
         
-        // Calculate eye bar dimensions based on actual eye positions
+        // Calculate eye bar dimensions based on actual eye positions (increased by 20%)
         const eyeY = Math.min(leftEye.y, rightEye.y);
-        const eyeBarHeight = Math.max(8, height * 0.08); // Minimum 8px height, max 8% of face height
+        const eyeBarHeight = Math.max(10, height * 0.096); // Increased from 8px to 10px min, 8% to 9.6%
         const eyeBarY = eyeY - eyeBarHeight / 2;
         
-        // Calculate horizontal bounds based on eye positions with some padding
-        const leftmostX = Math.min(leftEye.x, rightEye.x) - width * 0.15;
-        const rightmostX = Math.max(leftEye.x, rightEye.x) + width * 0.15;
+        // Calculate horizontal bounds based on eye positions with more padding (increased by 20%)
+        const leftmostX = Math.min(leftEye.x, rightEye.x) - width * 0.18; // Increased from 0.15 to 0.18
+        const rightmostX = Math.max(leftEye.x, rightEye.x) + width * 0.18; // Increased from 0.15 to 0.18
         const eyeBarX = Math.max(x, leftmostX);
         const eyeBarWidth = Math.min(x + width, rightmostX) - eyeBarX;
         
         ctx.fillStyle = '#000000';
         ctx.fillRect(eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight);
       } else {
-        // Improved fallback: more precise eye positioning
-        const eyeBarHeight = height * 0.12;
+        // Improved fallback: more precise eye positioning (increased by 20%)
+        const eyeBarHeight = height * 0.144; // Increased from 0.12 to 0.144
         const eyeBarY = y + height * 0.35; // Eyes are typically at 35% down from top of face
-        const eyeBarX = x + width * 0.1; // Start 10% in from face edge
-        const eyeBarWidth = width * 0.8; // Cover 80% of face width
+        const eyeBarX = x + width * 0.08; // Reduced from 0.1 to 0.08 for wider coverage
+        const eyeBarWidth = width * 0.84; // Increased from 0.8 to 0.84
         
         ctx.fillStyle = '#000000';
         ctx.fillRect(eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight);
