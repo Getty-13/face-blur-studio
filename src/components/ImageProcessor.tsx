@@ -78,6 +78,14 @@ const applyCensoring = (
     case 'show-landmarks':
       drawLandmarksOnly(ctx, face);
       break;
+      
+    case 'emoji-eyes':
+      drawEmojiEyes(ctx, face, width, height);
+      break;
+      
+    case 'emoji-face':
+      drawEmojiFace(ctx, face, width, height);
+      break;
   }
 };
 
@@ -699,6 +707,95 @@ const drawWireframeOverlay = (
   landmarks.forEach(point => {
     ctx.beginPath();
     ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
-    ctx.fill();
+  ctx.fill();
   });
+};
+
+// Draw emoji over eyes using same positioning as eye bar
+const drawEmojiEyes = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace,
+  faceWidth: number,
+  faceHeight: number
+) => {
+  const emojis = ['😎', '🤓', '😵', '🙈', '👀', '🔒'];
+  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+  
+  if (face.landmarks && face.landmarks.length >= 2) {
+    const leftEye = face.landmarks[0];
+    const rightEye = face.landmarks[1];
+    
+    // Calculate center position between eyes
+    const centerX = (leftEye.x + rightEye.x) / 2;
+    const centerY = (leftEye.y + rightEye.y) / 2;
+    
+    // Calculate emoji size based on face width
+    const emojiSize = Math.max(24, faceWidth * 0.3);
+    
+    ctx.font = `${emojiSize}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Add background for better visibility
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    const textWidth = ctx.measureText(emoji).width;
+    ctx.fillRect(
+      centerX - textWidth / 2 - 4,
+      centerY - emojiSize / 2 - 4,
+      textWidth + 8,
+      emojiSize + 8
+    );
+    
+    ctx.fillStyle = 'black';
+    ctx.fillText(emoji, centerX, centerY);
+  } else {
+    // Fallback positioning
+    const centerX = face.x + faceWidth / 2;
+    const centerY = face.y + faceHeight * 0.4;
+    const emojiSize = Math.max(24, faceWidth * 0.3);
+    
+    ctx.font = `${emojiSize}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    const textWidth = ctx.measureText(emoji).width;
+    ctx.fillRect(
+      centerX - textWidth / 2 - 4,
+      centerY - emojiSize / 2 - 4,
+      textWidth + 8,
+      emojiSize + 8
+    );
+    
+    ctx.fillStyle = 'black';
+    ctx.fillText(emoji, centerX, centerY);
+  }
+};
+
+// Draw emoji over entire face
+const drawEmojiFace = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace,
+  faceWidth: number,
+  faceHeight: number
+) => {
+  const emojis = ['😀', '😊', '😎', '🤖', '👽', '🎭', '🙃', '😵‍💫', '🤔', '😴'];
+  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+  
+  const centerX = face.x + faceWidth / 2;
+  const centerY = face.y + faceHeight / 2;
+  const emojiSize = Math.max(32, Math.min(faceWidth, faceHeight) * 0.8);
+  
+  ctx.font = `${emojiSize}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // Add background circle for better visibility
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, emojiSize / 2 + 8, 0, 2 * Math.PI);
+  ctx.fill();
+  
+  ctx.fillStyle = 'black';
+  ctx.fillText(emoji, centerX, centerY);
 };
