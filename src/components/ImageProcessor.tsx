@@ -79,6 +79,10 @@ const applyCensoring = (
       drawLandmarksOnly(ctx, face);
       break;
       
+    case 'landmarks-clean':
+      drawCleanLandmarks(ctx, face);
+      break;
+      
     case 'emoji-eyes':
       drawEmojiEyes(ctx, face, width, height);
       break;
@@ -958,4 +962,25 @@ const drawContourFace = (
     
     ctx.stroke();
   }
+};
+
+// Clean landmarks visualization - simple white dots
+const drawCleanLandmarks = (ctx: CanvasRenderingContext2D, face: DetectedFace) => {
+  if (!face.landmarks) return;
+
+  // Set up drawing style
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 0.5;
+
+  // Draw each landmark as a clean white dot
+  face.landmarks.forEach(point => {
+    const radius = 2.5;
+    
+    // Draw white dot with subtle black outline for contrast
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+  });
 };

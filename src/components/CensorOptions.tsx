@@ -2,9 +2,9 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine, Focus, Smile, Heart, Map } from 'lucide-react';
+import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine, Focus, Smile, Heart, Map, Target } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'blur-face' | 'blur-eyes' | 'wireframe' | 'show-landmarks' | 'emoji-eyes' | 'emoji-face' | 'contour-face';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'blur-face' | 'blur-eyes' | 'wireframe' | 'show-landmarks' | 'landmarks-clean' | 'emoji-eyes' | 'emoji-face' | 'contour-face';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
@@ -76,6 +76,12 @@ const censorOptions = [
     label: 'Show Landmarks',
     description: 'Display detected facial points',
     icon: MapPin,
+  },
+  {
+    type: 'landmarks-clean' as CensorType,
+    label: 'Clean Landmarks',
+    description: 'Clean white landmark dots',
+    icon: Target,
   },
   {
     type: 'emoji-eyes' as CensorType,
