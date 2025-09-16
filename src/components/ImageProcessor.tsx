@@ -86,6 +86,10 @@ const applyCensoring = (
     case 'emoji-face':
       drawEmojiFace(ctx, face, width, height);
       break;
+      
+    case 'contour-face':
+      drawContourFace(ctx, face, width, height);
+      break;
   }
 };
 
@@ -798,4 +802,160 @@ const drawEmojiFace = (
   
   ctx.fillStyle = 'black';
   ctx.fillText(emoji, centerX, centerY);
+};
+
+// Draw contour lines over face region
+const drawContourFace = (
+  ctx: CanvasRenderingContext2D,
+  face: DetectedFace,
+  faceWidth: number,
+  faceHeight: number
+) => {
+  const { x, y } = face;
+  
+  // Get image data for the face region
+  const imageData = ctx.getImageData(x, y, faceWidth, faceHeight);
+  const data = imageData.data;
+  
+  // Create a luminance map
+  const luminanceMap: number[][] = [];
+  for (let row = 0; row < faceHeight; row++) {
+    luminanceMap[row] = [];
+    for (let col = 0; col < faceWidth; col++) {
+      const idx = (row * faceWidth + col) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const luminance = (r * 0.299 + g * 0.587 + b * 0.114);
+      luminanceMap[row][col] = luminance;
+    }
+  }
+  
+  // Set drawing style for contour lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  
+  // Draw contour lines at different luminance levels
+  const contourLevels = [50, 80, 110, 140, 170, 200, 230];
+  
+  contourLevels.forEach(level => {
+    ctx.beginPath();
+    
+    // Horizontal passes
+    for (let row = 2; row < faceHeight - 2; row += 3) {
+      let inContour = false;
+      let contourStart = 0;
+      
+      for (let col = 1; col < faceWidth - 1; col++) {
+        const currentLum = luminanceMap[row][col];
+        const prevLum = luminanceMap[row][col - 1];
+        
+        // Check if we're crossing the contour level
+        const crossing = (currentLum >= level && prevLum < level) || 
+                        (currentLum < level && prevLum >= level);
+        
+        if (crossing && !inContour) {
+          // Start a new contour segment
+          contourStart = col;
+          inContour = true;
+        } else if ((crossing || col === faceWidth - 2) && inContour) {
+          // End the contour segment
+          const segmentLength = col - contourStart;
+          if (segmentLength > 4) {
+            // Draw curved contour line
+            const startX = x + contourStart;
+            const endX = x + col;
+            const centerY = y + row;
+            
+            // Add slight curve based on surrounding luminance
+            const curveFactor = (luminanceMap[Math.max(0, row - 1)][Math.floor((contourStart + col) / 2)] - level) * 0.02;
+            
+            ctx.moveTo(startX, centerY);
+            ctx.quadraticCurveTo(
+              startX + segmentLength / 2, 
+              centerY + curveFactor, 
+              endX, 
+              centerY
+            );
+          }
+          inContour = false;
+        }
+      }
+    }
+    
+    // Vertical passes for more complete contours
+    for (let col = 2; col < faceWidth - 2; col += 4) {
+      let inContour = false;
+      let contourStart = 0;
+      
+      for (let row = 1; row < faceHeight - 1; row++) {
+        const currentLum = luminanceMap[row][col];
+        const prevLum = luminanceMap[row - 1][col];
+        
+        const crossing = (currentLum >= level && prevLum < level) || 
+                        (currentLum < level && prevLum >= level);
+        
+        if (crossing && !inContour) {
+          contourStart = row;
+          inContour = true;
+        } else if ((crossing || row === faceHeight - 2) && inContour) {
+          const segmentLength = row - contourStart;
+          if (segmentLength > 4) {
+            const startY = y + contourStart;
+            const endY = y + row;
+            const centerX = x + col;
+            
+            const curveFactor = (luminanceMap[Math.floor((contourStart + row) / 2)][Math.max(0, col - 1)] - level) * 0.02;
+            
+            ctx.moveTo(centerX, startY);
+            ctx.quadraticCurveTo(
+              centerX + curveFactor,
+              startY + segmentLength / 2,
+              centerX,
+              endY
+            );
+          }
+          inContour = false;
+        }
+      }
+    }
+    
+    ctx.stroke();
+  });
+  
+  // Add some flowing organic curves
+  ctx.strokeStyle = 'rgba(200, 200, 200, 0.6)';
+  ctx.lineWidth = 1;
+  
+  for (let i = 0; i < 8; i++) {
+    const startX = x + (faceWidth * 0.1) + Math.random() * (faceWidth * 0.8);
+    const startY = y + (faceHeight * 0.1) + Math.random() * (faceHeight * 0.8);
+    
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    
+    // Create organic flowing curves
+    let currentX = startX;
+    let currentY = startY;
+    
+    for (let j = 0; j < 6; j++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 15 + Math.random() * 25;
+      const nextX = currentX + Math.cos(angle) * distance;
+      const nextY = currentY + Math.sin(angle) * distance;
+      
+      // Keep within face bounds
+      if (nextX >= x && nextX <= x + faceWidth && nextY >= y && nextY <= y + faceHeight) {
+        const cpX = currentX + (nextX - currentX) * 0.5 + (Math.random() - 0.5) * 10;
+        const cpY = currentY + (nextY - currentY) * 0.5 + (Math.random() - 0.5) * 10;
+        
+        ctx.quadraticCurveTo(cpX, cpY, nextX, nextY);
+        currentX = nextX;
+        currentY = nextY;
+      }
+    }
+    
+    ctx.stroke();
+  }
 };

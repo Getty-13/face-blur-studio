@@ -2,9 +2,9 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine, Focus, Smile, Heart } from 'lucide-react';
+import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine, Focus, Smile, Heart, Map } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'blur-face' | 'blur-eyes' | 'wireframe' | 'show-landmarks' | 'emoji-eyes' | 'emoji-face';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'blur-face' | 'blur-eyes' | 'wireframe' | 'show-landmarks' | 'emoji-eyes' | 'emoji-face' | 'contour-face';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
@@ -88,6 +88,12 @@ const censorOptions = [
     label: 'Emoji Face',
     description: 'Replace entire face with emoji',
     icon: Heart,
+  },
+  {
+    type: 'contour-face' as CensorType,
+    label: 'Contour Face',
+    description: 'Topographical contour lines',
+    icon: Map,
   },
 ];
 
