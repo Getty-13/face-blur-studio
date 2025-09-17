@@ -243,55 +243,75 @@ export const cleanupDetector = () => {
   }
 };
 
-// Generate detailed landmarks for better wireframe tracking
+// Generate detailed 68-point landmarks following dlib standard for comprehensive facial mapping
 const generateDetailedLandmarks = async (
   faceRegion: {x: number, y: number, width: number, height: number}
 ): Promise<Array<{x: number, y: number}>> => {
   const landmarks: Array<{x: number, y: number}> = [];
   
-  // Key facial features with more realistic positioning
-  const centerX = faceRegion.x + faceRegion.width * 0.5;
-  const centerY = faceRegion.y + faceRegion.height * 0.5;
+  const { x, y, width, height } = faceRegion;
+  const centerX = x + width * 0.5;
+  const centerY = y + height * 0.5;
   
-  // Eyes
-  landmarks.push(
-    { x: faceRegion.x + faceRegion.width * 0.3, y: faceRegion.y + faceRegion.height * 0.35 },
-    { x: faceRegion.x + faceRegion.width * 0.7, y: faceRegion.y + faceRegion.height * 0.35 }
-  );
+  // Face contour (17 points) - Jaw line from left ear to right ear
+  const jawPoints = [
+    [0.05, 0.7], [0.08, 0.8], [0.12, 0.88], [0.18, 0.94], [0.25, 0.98],
+    [0.32, 1.0], [0.4, 1.0], [0.48, 1.0], [0.5, 1.0], [0.52, 1.0],
+    [0.6, 1.0], [0.68, 1.0], [0.75, 0.98], [0.82, 0.94], [0.88, 0.88],
+    [0.92, 0.8], [0.95, 0.7]
+  ];
+  jawPoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
   
-  // Nose bridge and tip
-  landmarks.push(
-    { x: centerX, y: faceRegion.y + faceRegion.height * 0.45 },
-    { x: centerX, y: faceRegion.y + faceRegion.height * 0.55 }
-  );
+  // Right eyebrow (5 points)
+  const rightEyebrowPoints = [
+    [0.18, 0.25], [0.23, 0.22], [0.28, 0.21], [0.33, 0.22], [0.38, 0.25]
+  ];
+  rightEyebrowPoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
   
-  // Mouth corners and center
-  landmarks.push(
-    { x: faceRegion.x + faceRegion.width * 0.4, y: faceRegion.y + faceRegion.height * 0.75 },
-    { x: centerX, y: faceRegion.y + faceRegion.height * 0.75 },
-    { x: faceRegion.x + faceRegion.width * 0.6, y: faceRegion.y + faceRegion.height * 0.75 }
-  );
+  // Left eyebrow (5 points)
+  const leftEyebrowPoints = [
+    [0.62, 0.25], [0.67, 0.22], [0.72, 0.21], [0.77, 0.22], [0.82, 0.25]
+  ];
+  leftEyebrowPoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
   
-  // Eyebrows
-  landmarks.push(
-    { x: faceRegion.x + faceRegion.width * 0.25, y: faceRegion.y + faceRegion.height * 0.25 },
-    { x: faceRegion.x + faceRegion.width * 0.75, y: faceRegion.y + faceRegion.height * 0.25 }
-  );
+  // Nose bridge (4 points)
+  const noseBridgePoints = [
+    [0.5, 0.35], [0.5, 0.42], [0.5, 0.48], [0.5, 0.54]
+  ];
+  noseBridgePoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
   
-  // Chin
-  landmarks.push({ x: centerX, y: faceRegion.y + faceRegion.height * 0.9 });
+  // Lower nose (5 points) - nostrils and tip
+  const lowerNosePoints = [
+    [0.42, 0.58], [0.46, 0.6], [0.5, 0.61], [0.54, 0.6], [0.58, 0.58]
+  ];
+  lowerNosePoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
   
-  // Face contour (detailed outline)
-  const contourPoints = 20;
-  for (let i = 0; i < contourPoints; i++) {
-    const angle = (i / contourPoints) * Math.PI * 2 - Math.PI / 2;
-    const radiusX = faceRegion.width * 0.45;
-    const radiusY = faceRegion.height * 0.48;
-    landmarks.push({
-      x: centerX + Math.cos(angle) * radiusX,
-      y: centerY + Math.sin(angle) * radiusY,
-    });
-  }
+  // Right eye (6 points)
+  const rightEyePoints = [
+    [0.22, 0.35], [0.27, 0.33], [0.32, 0.33], [0.36, 0.35], [0.32, 0.37], [0.27, 0.37]
+  ];
+  rightEyePoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
+  
+  // Left eye (6 points)
+  const leftEyePoints = [
+    [0.64, 0.35], [0.68, 0.33], [0.73, 0.33], [0.78, 0.35], [0.73, 0.37], [0.68, 0.37]
+  ];
+  leftEyePoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
+  
+  // Mouth outline (12 points)
+  const mouthOutlinePoints = [
+    [0.37, 0.75], [0.41, 0.73], [0.45, 0.72], [0.5, 0.73], [0.55, 0.72],
+    [0.59, 0.73], [0.63, 0.75], [0.59, 0.78], [0.55, 0.8], [0.5, 0.8],
+    [0.45, 0.8], [0.41, 0.78]
+  ];
+  mouthOutlinePoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
+  
+  // Inner mouth (8 points)
+  const innerMouthPoints = [
+    [0.42, 0.75], [0.46, 0.74], [0.5, 0.74], [0.54, 0.74], [0.58, 0.75],
+    [0.54, 0.77], [0.5, 0.77], [0.46, 0.77]
+  ];
+  innerMouthPoints.forEach(([px, py]) => landmarks.push({ x: x + width * px, y: y + height * py }));
   
   return landmarks;
 };
