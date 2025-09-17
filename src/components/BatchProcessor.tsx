@@ -23,6 +23,7 @@ interface BatchProcessorProps {
   sortIntensity: number;
   confidenceThreshold: number;
   minFaceSize: number;
+  selectedEmoji: string;
 }
 
 export const BatchProcessor: React.FC<BatchProcessorProps> = ({
@@ -31,6 +32,7 @@ export const BatchProcessor: React.FC<BatchProcessorProps> = ({
   sortIntensity,
   confidenceThreshold,
   minFaceSize,
+  selectedEmoji,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<BatchImage[]>([]);
@@ -114,7 +116,8 @@ export const BatchProcessor: React.FC<BatchProcessorProps> = ({
           filteredFaces, 
           censorType, 
           pixelIntensity, 
-          sortIntensity
+          sortIntensity,
+          selectedEmoji
         );
 
         setImages(prev => prev.map(img => 

@@ -19,6 +19,7 @@ const Index = () => {
   const [sortIntensity, setSortIntensity] = useState(50);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.5);
   const [minFaceSize, setMinFaceSize] = useState(50);
+  const [selectedEmoji, setSelectedEmoji] = useState('😀');
 
   const handleImageLoad = useCallback(async (image: HTMLImageElement, url: string) => {
     setOriginalImage(image);
@@ -96,6 +97,8 @@ const Index = () => {
                   onPixelIntensityChange={setPixelIntensity}
                   sortIntensity={sortIntensity}
                   onSortIntensityChange={setSortIntensity}
+                  selectedEmoji={selectedEmoji}
+                  onEmojiChange={setSelectedEmoji}
                 />
                 
                 <DetectionControls
@@ -120,6 +123,7 @@ const Index = () => {
                   isProcessing={isProcessing}
                   pixelIntensity={pixelIntensity}
                   sortIntensity={sortIntensity}
+                  selectedEmoji={selectedEmoji}
                 />
               </div>
             </div>
@@ -136,6 +140,8 @@ const Index = () => {
                   onPixelIntensityChange={setPixelIntensity}
                   sortIntensity={sortIntensity}
                   onSortIntensityChange={setSortIntensity}
+                  selectedEmoji={selectedEmoji}
+                  onEmojiChange={setSelectedEmoji}
                 />
                 
                 <DetectionControls
@@ -155,6 +161,7 @@ const Index = () => {
                   sortIntensity={sortIntensity}
                   confidenceThreshold={confidenceThreshold}
                   minFaceSize={minFaceSize}
+                  selectedEmoji={selectedEmoji}
                 />
               </div>
             </div>

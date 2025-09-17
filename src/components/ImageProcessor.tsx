@@ -6,7 +6,8 @@ export const processImage = (
   faces: DetectedFace[],
   censorType: CensorType,
   pixelIntensity: number = 12,
-  sortIntensity: number = 50
+  sortIntensity: number = 50,
+  selectedEmoji: string = '😀'
 ): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -22,7 +23,7 @@ export const processImage = (
   
   // Apply censoring to each detected face
   faces.forEach(face => {
-    applyCensoring(ctx, face, censorType, pixelIntensity, sortIntensity);
+    applyCensoring(ctx, face, censorType, pixelIntensity, sortIntensity, selectedEmoji);
   });
   
   return canvas;
@@ -33,7 +34,8 @@ const applyCensoring = (
   face: DetectedFace, 
   censorType: CensorType,
   pixelIntensity: number = 12,
-  sortIntensity: number = 50
+  sortIntensity: number = 50,
+  selectedEmoji: string = '😀'
 ) => {
   const { x, y, width, height } = face;
   
@@ -83,12 +85,8 @@ const applyCensoring = (
       drawCleanLandmarks(ctx, face);
       break;
       
-    case 'emoji-eyes':
-      drawEmojiEyes(ctx, face, width, height);
-      break;
-      
     case 'emoji-face':
-      drawEmojiFace(ctx, face, width, height);
+      drawEmojiFace(ctx, face, width, height, selectedEmoji);
       break;
       
     case 'contour-face':
@@ -785,10 +783,10 @@ const drawEmojiFace = (
   ctx: CanvasRenderingContext2D,
   face: DetectedFace,
   faceWidth: number,
-  faceHeight: number
+  faceHeight: number,
+  selectedEmoji: string = '😀'
 ) => {
-  const emojis = ['😀', '😊', '😎', '🤖', '👽', '🎭', '🙃', '😵‍💫', '🤔', '😴'];
-  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+  const emoji = selectedEmoji;
   
   const centerX = face.x + faceWidth / 2;
   const centerY = face.y + faceHeight / 2;
@@ -836,12 +834,12 @@ const drawContourFace = (
   }
   
   // Set drawing style for contour lines
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+  ctx.lineWidth = 1.2;
   ctx.lineCap = 'round';
   
-  // Draw contour lines at different luminance levels
-  const contourLevels = [50, 80, 110, 140, 170, 200, 230];
+  // Draw contour lines at different luminance levels with better spacing
+  const contourLevels = [40, 65, 90, 115, 140, 165, 190, 215];
   
   contourLevels.forEach(level => {
     ctx.beginPath();
@@ -928,13 +926,13 @@ const drawContourFace = (
     ctx.stroke();
   });
   
-  // Add some flowing organic curves
-  ctx.strokeStyle = 'rgba(200, 200, 200, 0.6)';
-  ctx.lineWidth = 1;
+  // Add some subtle flowing organic curves for depth
+  ctx.strokeStyle = 'rgba(100, 100, 100, 0.4)';
+  ctx.lineWidth = 0.8;
   
-  for (let i = 0; i < 8; i++) {
-    const startX = x + (faceWidth * 0.1) + Math.random() * (faceWidth * 0.8);
-    const startY = y + (faceHeight * 0.1) + Math.random() * (faceHeight * 0.8);
+  for (let i = 0; i < 4; i++) {
+    const startX = x + (faceWidth * 0.2) + Math.random() * (faceWidth * 0.6);
+    const startY = y + (faceHeight * 0.2) + Math.random() * (faceHeight * 0.6);
     
     ctx.beginPath();
     ctx.moveTo(startX, startY);
@@ -968,19 +966,27 @@ const drawContourFace = (
 const drawCleanLandmarks = (ctx: CanvasRenderingContext2D, face: DetectedFace) => {
   if (!face.landmarks) return;
 
-  // Set up drawing style
+  // Set up drawing style for white dots with glow effect
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 8;
   ctx.fillStyle = '#ffffff';
   ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 0.5;
+  ctx.lineWidth = 1;
 
-  // Draw each landmark as a clean white dot
+  // Draw each landmark as a clean white dot with glow
   face.landmarks.forEach(point => {
-    const radius = 2.5;
+    const radius = 3;
     
-    // Draw white dot with subtle black outline for contrast
+    // Draw white dot with subtle black outline and glow
     ctx.beginPath();
     ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
     ctx.fill();
+    ctx.shadowBlur = 0; // Turn off shadow for outline
     ctx.stroke();
+    ctx.shadowBlur = 8; // Turn shadow back on for next dot
   });
+  
+  // Reset shadow settings
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
 };

@@ -17,6 +17,7 @@ interface CombinedUploadPreviewProps {
   isProcessing: boolean;
   pixelIntensity: number;
   sortIntensity: number;
+  selectedEmoji: string;
 }
 
 export const CombinedUploadPreview: React.FC<CombinedUploadPreviewProps> = ({
@@ -29,6 +30,7 @@ export const CombinedUploadPreview: React.FC<CombinedUploadPreviewProps> = ({
   isProcessing,
   pixelIntensity,
   sortIntensity,
+  selectedEmoji,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -120,7 +122,7 @@ export const CombinedUploadPreview: React.FC<CombinedUploadPreviewProps> = ({
 
     if (faces.length > 0) {
       // Process the image with censoring
-      const processed = processImage(originalImage, faces, censorType, pixelIntensity, sortIntensity);
+      const processed = processImage(originalImage, faces, censorType, pixelIntensity, sortIntensity, selectedEmoji);
       setProcessedCanvas(processed);
       
       // Scale and draw processed image
@@ -135,7 +137,7 @@ export const CombinedUploadPreview: React.FC<CombinedUploadPreviewProps> = ({
       ctx.drawImage(originalImage, 0, 0, displayWidth, displayHeight);
       setProcessedCanvas(null);
     }
-  }, [originalImage, faces, censorType, pixelIntensity, sortIntensity]);
+  }, [originalImage, faces, censorType, pixelIntensity, sortIntensity, selectedEmoji]);
 
   const handleDownload = () => {
     if (!processedCanvas) return;

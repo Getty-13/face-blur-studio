@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Square, Minus, Eye, User, Shuffle, Zap, MapPin, ScanLine, Focus, Smile, Heart, Map, Target } from 'lucide-react';
 
-export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'blur-face' | 'blur-eyes' | 'wireframe' | 'show-landmarks' | 'landmarks-clean' | 'emoji-eyes' | 'emoji-face' | 'contour-face';
+export type CensorType = 'black-square' | 'eye-bar' | 'pixelated-eyes' | 'pixelated-face' | 'pixel-sort' | 'pixelsort-eye-bar' | 'blur-face' | 'blur-eyes' | 'wireframe' | 'show-landmarks' | 'landmarks-clean' | 'emoji-face' | 'contour-face';
 
 interface CensorOptionsProps {
   selectedType: CensorType;
@@ -14,6 +14,8 @@ interface CensorOptionsProps {
   onPixelIntensityChange: (value: number) => void;
   sortIntensity: number;
   onSortIntensityChange: (value: number) => void;
+  selectedEmoji: string;
+  onEmojiChange: (emoji: string) => void;
 }
 
 const censorOptions = [
@@ -84,16 +86,10 @@ const censorOptions = [
     icon: Target,
   },
   {
-    type: 'emoji-eyes' as CensorType,
-    label: 'Emoji Eyes',
-    description: 'Replace eyes with emoji',
-    icon: Smile,
-  },
-  {
     type: 'emoji-face' as CensorType,
     label: 'Emoji Face',
     description: 'Replace entire face with emoji',
-    icon: Heart,
+    icon: Smile,
   },
   {
     type: 'contour-face' as CensorType,
@@ -111,9 +107,14 @@ export const CensorOptions: React.FC<CensorOptionsProps> = ({
   onPixelIntensityChange,
   sortIntensity,
   onSortIntensityChange,
+  selectedEmoji,
+  onEmojiChange,
 }) => {
   const needsPixelSlider = ['pixelated-eyes', 'pixelated-face'].includes(selectedType);
   const needsSortSlider = ['pixel-sort', 'pixelsort-eye-bar'].includes(selectedType);
+  const needsEmojiSelector = selectedType === 'emoji-face';
+  
+  const emojiOptions = ['😀', '😂', '😍', '🤔', '😎', '🥸', '🤖', '👽', '🎭', '🎃'];
   return (
     <Card className="p-6 shadow-card">
       <div className="mb-4">
@@ -156,7 +157,7 @@ export const CensorOptions: React.FC<CensorOptionsProps> = ({
         })}
       </div>
       
-      {(needsPixelSlider || needsSortSlider) && facesDetected > 0 && (
+      {(needsPixelSlider || needsSortSlider || needsEmojiSelector) && facesDetected > 0 && (
         <div className="mt-4 pt-4 border-t border-border">
           {needsPixelSlider && (
             <div className="space-y-2">
@@ -188,6 +189,24 @@ export const CensorOptions: React.FC<CensorOptionsProps> = ({
               />
               <div className="text-xs text-muted-foreground">
                 Strength: {sortIntensity}%
+              </div>
+            </div>
+          )}
+          
+          {needsEmojiSelector && (
+            <div className="space-y-2 mt-4">
+              <label className="text-sm font-medium">Select Emoji</label>
+              <div className="grid grid-cols-5 gap-2">
+                {emojiOptions.map((emoji) => (
+                  <Button
+                    key={emoji}
+                    variant={selectedEmoji === emoji ? "default" : "outline"}
+                    className="h-10 text-lg"
+                    onClick={() => onEmojiChange(emoji)}
+                  >
+                    {emoji}
+                  </Button>
+                ))}
               </div>
             </div>
           )}
