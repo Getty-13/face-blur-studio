@@ -276,50 +276,52 @@ const pixelSortRegion = (
   ctx.putImageData(imageData, ix, iy);
 };
 
+// Enhanced eye region calculation using precise landmark detection
+const getEyeRegionBounds = (face: DetectedFace) => {
+  if (face.landmarks && face.landmarks.length >= 2) {
+    const leftEye = face.landmarks[0];
+    const rightEye = face.landmarks[1];
+    
+    // Calculate eye region based on actual eye positions
+    const eyeDistance = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2));
+    const eyePadding = eyeDistance * 0.4;
+    
+    const centerX = (leftEye.x + rightEye.x) / 2;
+    const centerY = (leftEye.y + rightEye.y) / 2;
+    
+    return {
+      x: Math.min(leftEye.x, rightEye.x) - eyePadding,
+      y: centerY - eyePadding * 0.5,
+      width: Math.abs(rightEye.x - leftEye.x) + eyePadding * 2,
+      height: eyePadding,
+      angle: Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x)
+    };
+  } else {
+    // Fallback to proportional positioning
+    const { x, y, width, height } = face;
+    return {
+      x: x + width * 0.15,
+      y: y + height * 0.25,
+      width: width * 0.7,
+      height: height * 0.3,
+      angle: 0
+    };
+  }
+};
+
 // Pixel sort specifically for eye region with precise targeting
 const pixelSortEyeRegion = (
   ctx: CanvasRenderingContext2D,
   face: DetectedFace,
   intensity: number
 ) => {
-  const { x, y, width, height } = face;
-  
-  // Calculate eye region bounds - more precise targeting
-  let eyeBarY, eyeBarHeight;
-  
-  if (face.landmarks && face.landmarks.length > 0) {
-    // Use landmarks for precise eye positioning
-    const eyeLandmarks = face.landmarks.slice(0, 6);
-    
-    if (eyeLandmarks.length >= 2) {
-      const eyeYPositions = eyeLandmarks.map(p => p.y);
-      const minEyeY = Math.min(...eyeYPositions);
-      const maxEyeY = Math.max(...eyeYPositions);
-      
-      // Slightly smaller padding for more precise targeting
-      const eyePadding = height * 0.08;
-      eyeBarY = minEyeY - eyePadding;
-      eyeBarHeight = (maxEyeY - minEyeY) + (eyePadding * 2);
-    } else {
-      // Fallback to proportional positioning
-      eyeBarHeight = height * 0.3;
-      eyeBarY = y + height * 0.25;
-    }
-  } else {
-    // Fallback when no landmarks available
-    eyeBarHeight = height * 0.3;
-    eyeBarY = y + height * 0.25;
-  }
-  
-  // Ensure bounds are within the face region
-  eyeBarY = Math.max(y, eyeBarY);
-  eyeBarHeight = Math.min(height, eyeBarHeight);
+  const eyeRegion = getEyeRegionBounds(face);
   
   // Apply aggressive pixel sorting to the eye region
-  const ix = Math.max(0, Math.floor(x));
-  const iy = Math.max(0, Math.floor(eyeBarY));
-  const iw = Math.max(1, Math.floor(width));
-  const ih = Math.max(1, Math.floor(eyeBarHeight));
+  const ix = Math.max(0, Math.floor(eyeRegion.x));
+  const iy = Math.max(0, Math.floor(eyeRegion.y));
+  const iw = Math.max(1, Math.floor(eyeRegion.width));
+  const ih = Math.max(1, Math.floor(eyeRegion.height));
 
   const imageData = ctx.getImageData(ix, iy, iw, ih);
   const data = imageData.data;
@@ -543,41 +545,28 @@ const blurRegion = (
   ctx.putImageData(imageData, ix, iy);
 };
 
-// Precise eye region blur using same logic as eye bar
+// Precise eye region blur using enhanced landmark detection
 const blurEyeRegionPrecise = (
   ctx: CanvasRenderingContext2D,
   face: DetectedFace,
   faceWidth: number,
   faceHeight: number
 ) => {
-  if (face.landmarks && face.landmarks.length >= 2) {
-    const leftEye = face.landmarks[0];
-    const rightEye = face.landmarks[1];
-    
-    // Calculate eye region dimensions based on actual eye positions
-    const eyeY = Math.min(leftEye.y, rightEye.y);
-    const eyeBarHeight = Math.max(10, faceHeight * 0.096);
-    const eyeBarY = eyeY - eyeBarHeight / 2;
-    
-    // Calculate horizontal bounds based on eye positions with padding
-    const leftmostX = Math.min(leftEye.x, rightEye.x) - faceWidth * 0.18;
-    const rightmostX = Math.max(leftEye.x, rightEye.x) + faceWidth * 0.18;
-    const eyeBarX = Math.max(face.x, leftmostX);
-    const eyeBarWidth = Math.min(face.x + faceWidth, rightmostX) - eyeBarX;
-    
-    blurRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, 6);
-  } else {
-    // Fallback: use same proportions as eye bar fallback
-    const eyeBarHeight = faceHeight * 0.144;
-    const eyeBarY = face.y + faceHeight * 0.35;
-    const eyeBarX = face.x + faceWidth * 0.08;
-    const eyeBarWidth = faceWidth * 0.84;
-    
-    blurRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, 6);
-  }
+  const eyeRegion = getEyeRegionBounds(face);
+  
+  // Apply blur with slightly larger padding for smooth effect
+  const blurPadding = Math.max(eyeRegion.width, eyeRegion.height) * 0.1;
+  blurRegion(
+    ctx, 
+    eyeRegion.x - blurPadding, 
+    eyeRegion.y - blurPadding, 
+    eyeRegion.width + blurPadding * 2, 
+    eyeRegion.height + blurPadding * 2, 
+    8
+  );
 };
 
-// Precise eye region pixelation using same logic as eye bar
+// Precise eye region pixelation using enhanced landmark detection
 const pixelateEyeRegionPrecise = (
   ctx: CanvasRenderingContext2D,
   face: DetectedFace,
@@ -585,31 +574,8 @@ const pixelateEyeRegionPrecise = (
   faceHeight: number,
   pixelIntensity: number
 ) => {
-  if (face.landmarks && face.landmarks.length >= 2) {
-    const leftEye = face.landmarks[0];
-    const rightEye = face.landmarks[1];
-    
-    // Calculate eye region dimensions based on actual eye positions
-    const eyeY = Math.min(leftEye.y, rightEye.y);
-    const eyeBarHeight = Math.max(10, faceHeight * 0.096);
-    const eyeBarY = eyeY - eyeBarHeight / 2;
-    
-    // Calculate horizontal bounds based on eye positions with padding
-    const leftmostX = Math.min(leftEye.x, rightEye.x) - faceWidth * 0.18;
-    const rightmostX = Math.max(leftEye.x, rightEye.x) + faceWidth * 0.18;
-    const eyeBarX = Math.max(face.x, leftmostX);
-    const eyeBarWidth = Math.min(face.x + faceWidth, rightmostX) - eyeBarX;
-    
-    pixelateRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, pixelIntensity);
-  } else {
-    // Fallback: use same proportions as eye bar fallback
-    const eyeBarHeight = faceHeight * 0.144;
-    const eyeBarY = face.y + faceHeight * 0.35;
-    const eyeBarX = face.x + faceWidth * 0.08;
-    const eyeBarWidth = faceWidth * 0.84;
-    
-    pixelateRegion(ctx, eyeBarX, eyeBarY, eyeBarWidth, eyeBarHeight, pixelIntensity);
-  }
+  const eyeRegion = getEyeRegionBounds(face);
+  pixelateRegion(ctx, eyeRegion.x, eyeRegion.y, eyeRegion.width, eyeRegion.height, pixelIntensity);
 };
 
 const drawLandmarksOnly = (
@@ -680,41 +646,163 @@ const drawLandmarksOnly = (
   ctx.fillText(`Face: ${landmarks.length} landmarks`, face.x, face.y - 5);
 };
 
-const drawWireframeOverlay = (
-  ctx: CanvasRenderingContext2D,
-  face: DetectedFace
-) => {
-  if (!face.landmarks || face.landmarks.length === 0) return;
+// Advanced wireframe with sophisticated triangulated mesh in bright yellow
+const drawWireframeOverlay = (ctx: CanvasRenderingContext2D, face: DetectedFace) => {
+  if (!face.landmarks || face.landmarks.length === 0) {
+    console.log('No landmarks available for wireframe');
+    return;
+  }
+
+  ctx.save();
   
-  ctx.strokeStyle = '#00ff00';
-  ctx.lineWidth = 1;
-  ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-  
+  // Bright yellow wireframe styling to match reference
+  ctx.strokeStyle = '#FFFF00';
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = 'rgba(255, 255, 0, 0.6)';
+  ctx.shadowBlur = 3;
+
   const landmarks = face.landmarks;
-  
-  // Draw triangular mesh by connecting nearby points
-  for (let i = 0; i < landmarks.length; i++) {
-    for (let j = i + 1; j < landmarks.length; j++) {
-      const p1 = landmarks[i];
-      const p2 = landmarks[j];
-      const distance = Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-      
-      // Only connect points that are reasonably close
-      if (distance < face.width * 0.3) {
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
+
+  // Create sophisticated triangulation patterns
+  ctx.beginPath();
+
+  // Face contour triangulation (points 0-16)
+  for (let i = 0; i < Math.min(16, landmarks.length - 1); i++) {
+    ctx.moveTo(landmarks[i].x, landmarks[i].y);
+    ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+    
+    // Create triangular connections to inner facial features
+    if (i % 2 === 0 && landmarks.length > 27) {
+      ctx.moveTo(landmarks[i].x, landmarks[i].y);
+      ctx.lineTo(landmarks[27 + (i % 9)].x, landmarks[27 + (i % 9)].y); // Connect to nose
+    }
+  }
+
+  // Eyebrow triangulation (points 17-26)
+  for (let i = 17; i < Math.min(26, landmarks.length); i++) {
+    if (i < 21 && i + 1 < landmarks.length) {
+      // Right eyebrow internal structure
+      ctx.moveTo(landmarks[i].x, landmarks[i].y);
+      ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+      if (landmarks.length > 36 && 36 + (i - 17) < landmarks.length) {
+        ctx.moveTo(landmarks[i].x, landmarks[i].y);
+        ctx.lineTo(landmarks[36 + (i - 17)].x, landmarks[36 + (i - 17)].y); // Connect to right eye
+      }
+    } else if (i < 26 && i + 1 < landmarks.length) {
+      // Left eyebrow internal structure
+      ctx.moveTo(landmarks[i].x, landmarks[i].y);
+      ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+      if (landmarks.length > 42 && 42 + (i - 22) < landmarks.length) {
+        ctx.moveTo(landmarks[i].x, landmarks[i].y);
+        ctx.lineTo(landmarks[42 + (i - 22)].x, landmarks[42 + (i - 22)].y); // Connect to left eye
       }
     }
   }
-  
-  // Draw landmark points
-  landmarks.forEach(point => {
+
+  // Nose bridge and tip triangulation (points 27-35)
+  for (let i = 27; i < Math.min(35, landmarks.length - 1); i++) {
+    ctx.moveTo(landmarks[i].x, landmarks[i].y);
+    ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+    
+    // Create radial connections from nose tip
+    if (i > 30 && landmarks.length > 48 && 48 + ((i - 31) * 2) % 12 < landmarks.length) {
+      ctx.moveTo(landmarks[33].x, landmarks[33].y); // Nose tip
+      ctx.lineTo(landmarks[48 + ((i - 31) * 2) % 12].x, landmarks[48 + ((i - 31) * 2) % 12].y); // To mouth
+    }
+  }
+
+  // Eye triangulation with detailed internal structure
+  if (landmarks.length > 47) {
+    // Right eye (36-41)
+    for (let i = 36; i < Math.min(41, landmarks.length); i++) {
+      ctx.moveTo(landmarks[i].x, landmarks[i].y);
+      ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+      // Create triangular mesh within eye
+      if (landmarks.length > 39) {
+        ctx.moveTo(landmarks[i].x, landmarks[i].y);
+        ctx.lineTo(landmarks[39].x, landmarks[39].y); // Connect to eye center
+      }
+    }
+    if (landmarks.length > 41 && landmarks.length > 36) {
+      ctx.moveTo(landmarks[41].x, landmarks[41].y);
+      ctx.lineTo(landmarks[36].x, landmarks[36].y); // Close eye
+    }
+
+    // Left eye (42-47)
+    for (let i = 42; i < Math.min(47, landmarks.length); i++) {
+      ctx.moveTo(landmarks[i].x, landmarks[i].y);
+      ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+      // Create triangular mesh within eye
+      if (landmarks.length > 45) {
+        ctx.moveTo(landmarks[i].x, landmarks[i].y);
+        ctx.lineTo(landmarks[45].x, landmarks[45].y); // Connect to eye center
+      }
+    }
+    if (landmarks.length > 47 && landmarks.length > 42) {
+      ctx.moveTo(landmarks[47].x, landmarks[47].y);
+      ctx.lineTo(landmarks[42].x, landmarks[42].y); // Close eye
+    }
+  }
+
+  // Mouth triangulation with complex internal geometry
+  if (landmarks.length > 67) {
+    // Outer mouth (48-59)
+    for (let i = 48; i < Math.min(59, landmarks.length); i++) {
+      ctx.moveTo(landmarks[i].x, landmarks[i].y);
+      ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+      
+      // Connect outer to inner mouth points
+      if (i < 55 && landmarks.length > 60 + (i - 48)) {
+        ctx.moveTo(landmarks[i].x, landmarks[i].y);
+        ctx.lineTo(landmarks[60 + (i - 48)].x, landmarks[60 + (i - 48)].y);
+      }
+    }
+    if (landmarks.length > 59 && landmarks.length > 48) {
+      ctx.moveTo(landmarks[59].x, landmarks[59].y);
+      ctx.lineTo(landmarks[48].x, landmarks[48].y); // Close outer mouth
+    }
+
+    // Inner mouth (60-67)
+    for (let i = 60; i < Math.min(67, landmarks.length); i++) {
+      ctx.moveTo(landmarks[i].x, landmarks[i].y);
+      ctx.lineTo(landmarks[i + 1].x, landmarks[i + 1].y);
+    }
+    if (landmarks.length > 67 && landmarks.length > 60) {
+      ctx.moveTo(landmarks[67].x, landmarks[67].y);
+      ctx.lineTo(landmarks[60].x, landmarks[60].y); // Close inner mouth
+    }
+  }
+
+  // Cross-facial triangulation for structural integrity
+  // Major structural lines
+  if (landmarks.length > 30) {
+    // Vertical center line
+    if (landmarks.length > 27 && landmarks.length > 8) {
+      ctx.moveTo(landmarks[27].x, landmarks[27].y); // Nose bridge
+      ctx.lineTo(landmarks[8].x, landmarks[8].y);   // Chin center
+    }
+    
+    // Horizontal eye line
+    if (landmarks.length > 45 && landmarks.length > 36) {
+      ctx.moveTo(landmarks[36].x, landmarks[36].y); // Right eye corner
+      ctx.lineTo(landmarks[45].x, landmarks[45].y); // Left eye corner
+    }
+  }
+
+  ctx.stroke();
+
+  // Draw enhanced landmark points with yellow glow
+  ctx.fillStyle = '#FFFF00';
+  ctx.shadowBlur = 6;
+  landmarks.forEach((landmark, index) => {
     ctx.beginPath();
-    ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
-  ctx.fill();
+    // Vary dot size based on importance
+    const dotSize = (index >= 36 && index <= 47) ? 2.5 : 2; // Eyes slightly larger
+    ctx.arc(landmark.x, landmark.y, dotSize, 0, 2 * Math.PI);
+    ctx.fill();
   });
+
+  ctx.restore();
 };
 
 // Draw emoji over eyes using same positioning as eye bar
@@ -962,31 +1050,49 @@ const drawContourFace = (
   }
 };
 
-// Clean landmarks visualization - simple white dots
+// Enhanced clean landmark visualization with bright yellow dots and glow
 const drawCleanLandmarks = (ctx: CanvasRenderingContext2D, face: DetectedFace) => {
-  if (!face.landmarks) return;
+  if (!face.landmarks || face.landmarks.length === 0) {
+    console.log('No landmarks available for clean landmarks display');
+    return;
+  }
 
-  // Set up drawing style for white dots with glow effect
-  ctx.shadowColor = '#ffffff';
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 1;
-
-  // Draw each landmark as a clean white dot with glow
-  face.landmarks.forEach(point => {
-    const radius = 3;
-    
-    // Draw white dot with subtle black outline and glow
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.shadowBlur = 0; // Turn off shadow for outline
-    ctx.stroke();
-    ctx.shadowBlur = 8; // Turn shadow back on for next dot
-  });
+  ctx.save();
   
-  // Reset shadow settings
-  ctx.shadowColor = 'transparent';
+  // Enhanced glow effect with yellow
+  ctx.shadowColor = 'rgba(255, 255, 0, 0.9)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
+  // Draw dense landmark points with varying sizes for depth
+  face.landmarks.forEach((landmark, index) => {
+    // Determine dot size based on landmark importance
+    let dotSize = 3;
+    if (index < 17) dotSize = 2.5; // Face contour - smaller
+    else if (index >= 36 && index <= 47) dotSize = 3.5; // Eyes - larger
+    else if (index >= 48 && index <= 67) dotSize = 3; // Mouth - medium
+    else if (index >= 27 && index <= 35) dotSize = 2.5; // Nose - smaller
+    
+    // Outer glow ring
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+    ctx.beginPath();
+    ctx.arc(landmark.x, landmark.y, dotSize + 2, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Main bright yellow dot
+    ctx.fillStyle = '#FFFF00';
+    ctx.beginPath();
+    ctx.arc(landmark.x, landmark.y, dotSize, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Inner bright core
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(landmark.x, landmark.y, dotSize * 0.4, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+
+  ctx.restore();
   ctx.shadowBlur = 0;
 };
